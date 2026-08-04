@@ -1,0 +1,7 @@
+bin/
+*.prg
+*.iq
+developer_key.der
+__pycache__/
+*.pyc
+.vscode/
