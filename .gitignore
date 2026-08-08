@@ -2,6 +2,9 @@ bin/
 *.prg
 *.iq
 developer_key.der
+developer_key
+developer_key.*
+*.der
 __pycache__/
 *.pyc
 .vscode/
