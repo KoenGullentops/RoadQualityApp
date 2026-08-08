@@ -2,19 +2,26 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Sensor as Sensor;
 using Toybox.FitContributor as Fit;
-using Toybox.Lang as Lang;
 using Toybox.Math as Math;
 
-// A cycling data field (tile) that reads the live accelerometer and shows
-// a rolling road-roughness score. Unlike a raw SensorLogger (which can only
-// be attached by the app that creates the FIT recording session), a plain
-// Sensor.registerSensorDataListener works fine inside a Data Field, since
-// it just reads live sensor events rather than owning the recording.
+// Rolling average of road roughness over the trailing 5 minutes (300 seconds)
+// (a sliding window of the last 300 once-per-second compute() samples).
 class RoadQualityField extends Ui.DataField {
 
     hidden var roughnessField;
+
+    // Accumulates live accelerometer samples between compute() calls.
     hidden var sumSquaredDeviation;
     hidden var sampleCount;
+
+    // Ring buffer holding the last windowSize per-second instantaneous
+    // values, plus a running sum so the average is O(1) to update.
+    hidden var windowSize;
+    hidden var buffer;
+    hidden var writeIndex;
+    hidden var filledCount;
+    hidden var ringSum;
+
     hidden var currentValue;
 
     function initialize() {
@@ -24,11 +31,17 @@ class RoadQualityField extends Ui.DataField {
         sampleCount = 0;
         currentValue = 0.0;
 
-        // Persists a computed roughness value into the FIT activity file
-        // once per compute() cycle (~1 Hz), so it's still exportable
-        // afterwards even though we're not logging raw samples.
+        windowSize = 300;
+        buffer = new [windowSize];
+        for (var i = 0; i < windowSize; i += 1) {
+            buffer[i] = 0.0;
+        }
+        writeIndex = 0;
+        filledCount = 0;
+        ringSum = 0.0;
+
         roughnessField = createField(
-            "road_roughness",
+            "roughness_5min_g",
             0,
             Fit.DATA_TYPE_FLOAT,
             { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
@@ -66,11 +79,24 @@ class RoadQualityField extends Ui.DataField {
     }
 
     function compute(info) {
+        var instant = 0.0;
         if (sampleCount > 0) {
-            currentValue = Math.sqrt(sumSquaredDeviation / sampleCount);
+            instant = Math.sqrt(sumSquaredDeviation / sampleCount);
         }
         sumSquaredDeviation = 0.0;
         sampleCount = 0;
+
+        if (filledCount < windowSize) {
+            ringSum += instant;
+            buffer[writeIndex] = instant;
+            filledCount += 1;
+        } else {
+            ringSum += instant - buffer[writeIndex];
+            buffer[writeIndex] = instant;
+        }
+        writeIndex = (writeIndex + 1) % windowSize;
+
+        currentValue = ringSum / filledCount;
 
         roughnessField.setData(currentValue);
         return currentValue;
@@ -83,9 +109,9 @@ class RoadQualityField extends Ui.DataField {
         var w = dc.getWidth();
         var h = dc.getHeight();
 
-        dc.drawText(w / 2, h * 0.22, Gfx.FONT_TINY, "Road Roughness", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.22, Gfx.FONT_TINY, "Roughness (5 min)", Gfx.TEXT_JUSTIFY_CENTER);
         dc.drawText(w / 2, h * 0.55, Gfx.FONT_NUMBER_MEDIUM, currentValue.format("%.2f"), Gfx.TEXT_JUSTIFY_CENTER);
-        dc.drawText(w / 2, h * 0.85, Gfx.FONT_XTINY, "g RMS", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.85, Gfx.FONT_XTINY, "g avg", Gfx.TEXT_JUSTIFY_CENTER);
     }
 
 }

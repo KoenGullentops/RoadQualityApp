@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
     <iq:application
-        id="a1b2c3d4-1030-4a1a-9c1a-r0adqua1ity01"
+        id="718055c3-8e4b-4032-bc47-8f6e9a9eb7e7"
         type="dataField"
         name="@Strings.AppName"
         entry="RoadQualityApp"

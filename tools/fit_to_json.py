@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Convert a Road Quality FIT file (recorded with the RoadQualityApp Connect IQ
-data field active on a ride) into a JSON file with the GPS track and the
-per-second road-roughness score the data field computed and wrote into the
-FIT file as a developer field named "road_roughness".
+Convert a Road Quality FIT file (recorded with one or more of the
+RoadQualityApp Connect IQ data fields active on a ride) into a JSON file
+with the GPS track and the rolling road-roughness averages each field
+computed and wrote into the FIT file as developer fields.
 
 Usage:
     python3 fit_to_json.py ride.fit ride.json
@@ -19,8 +19,16 @@ from datetime import datetime, timezone
 from fitparse import FitFile
 
 RECORD_MESG = "record"
-ROUGHNESS_FIELD_NAME = "road_roughness"
 SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
+
+# Each entry is a data field project's developer field name -> the JSON key
+# it's reported under. A ride may have any subset of these three fields
+# active, since each is a separately-added tile.
+ROUGHNESS_FIELDS = {
+    "roughness_1min_g": "roughness_1min_g",
+    "roughness_5min_g": "roughness_5min_g",
+    "roughness_trip_g": "roughness_trip_g",
+}
 
 
 def iso(dt):
@@ -45,14 +53,17 @@ def read_records(fit):
         if speed is None:
             speed = values.get("speed")
 
-        records.append({
+        record = {
             "timestamp": iso(ts),
             "epoch": ts.timestamp(),
             "lat": lat * SEMICIRCLE_TO_DEG if lat is not None else None,
             "lon": lon * SEMICIRCLE_TO_DEG if lon is not None else None,
             "speed_mps": speed,
-            "roughness_g": values.get(ROUGHNESS_FIELD_NAME),
-        })
+        }
+        for field_name, json_key in ROUGHNESS_FIELDS.items():
+            record[json_key] = values.get(field_name)
+
+        records.append(record)
 
     records.sort(key=lambda r: r["epoch"])
     return records
@@ -68,26 +79,30 @@ def main():
     fit.parse()
 
     records = read_records(fit)
-    with_roughness = [r for r in records if r["roughness_g"] is not None]
 
-    if not with_roughness:
-        print("Warning: no records with a 'road_roughness' developer field were found. "
-              "Was the Road Quality data field actually added to the activity screen "
-              "during this ride?", file=sys.stderr)
+    present_fields = [
+        json_key for json_key in ROUGHNESS_FIELDS.values()
+        if any(r[json_key] is not None for r in records)
+    ]
+
+    if not present_fields:
+        print("Warning: no records with any road-roughness developer field were found. "
+              "Was at least one Road Roughness data field actually added to the "
+              "activity screen during this ride?", file=sys.stderr)
 
     output = {
         "source_fit_file": args.fit_file,
         "generated_at": iso(datetime.now(tz=timezone.utc)),
         "record_count": len(records),
-        "records_with_roughness": len(with_roughness),
+        "roughness_fields_present": present_fields,
         "road_quality": records,
     }
 
     with open(args.json_file, "w") as f:
         json.dump(output, f, indent=2)
 
-    print("Wrote {} records ({} with a road-roughness value) to {}".format(
-        len(records), len(with_roughness), args.json_file))
+    print("Wrote {} records to {} (roughness fields present: {})".format(
+        len(records), args.json_file, ", ".join(present_fields) or "none"))
 
 
 if __name__ == "__main__":
