@@ -1,6 +1,7 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang as Lang;
+using Toybox.Activity as Activity;
 
 class RoadQualityView extends Ui.View {
 
@@ -39,10 +40,55 @@ class RoadQualityView extends Ui.View {
             Gfx.TEXT_JUSTIFY_CENTER);
 
         var graphX = (w * 0.06).toNumber();
-        var graphY = (h * 0.34).toNumber();
+        var graphY = (h * 0.32).toNumber();
         var graphW = (w * 0.88).toNumber();
-        var graphH = (h * 0.58).toNumber();
+        var graphH = (h * 0.42).toNumber();
         drawGraph(dc, graphX, graphY, graphW, graphH);
+
+        drawStats(dc, w, h);
+    }
+
+    // Ride basics below the graph, in a smaller font, pulled from the
+    // activity info the recording session already exposes - no separate
+    // GPS/HR reading needed on our part.
+    hidden function drawStats(dc as Gfx.Dc, w as Lang.Number, h as Lang.Number) as Void {
+        var info = Activity.getActivityInfo();
+
+        var speedText = "-- km/h";
+        var distanceText = "-- km";
+        var timeText = "--:--";
+        var hrText = "-- bpm";
+
+        if (info != null) {
+            if (info.currentSpeed != null) {
+                speedText = (info.currentSpeed * 3.6).format("%.1f") + " km/h";
+            }
+            if (info.elapsedDistance != null) {
+                distanceText = (info.elapsedDistance / 1000.0).format("%.2f") + " km";
+            }
+            if (info.elapsedTime != null) {
+                timeText = formatElapsedTime(info.elapsedTime);
+            }
+            if (info.currentHeartRate != null) {
+                hrText = info.currentHeartRate.format("%d") + " bpm";
+            }
+        }
+
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, h * 0.78, Gfx.FONT_XTINY, speedText + "   " + distanceText, Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.88, Gfx.FONT_XTINY, timeText + "   " + hrText, Gfx.TEXT_JUSTIFY_CENTER);
+    }
+
+    hidden function formatElapsedTime(elapsedMs as Lang.Number) as Lang.String {
+        var totalSeconds = elapsedMs / 1000;
+        var hours = totalSeconds / 3600;
+        var minutes = (totalSeconds % 3600) / 60;
+        var seconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            return hours.format("%d") + ":" + minutes.format("%02d") + ":" + seconds.format("%02d");
+        }
+        return minutes.format("%02d") + ":" + seconds.format("%02d");
     }
 
     // Draws the whole-trip roughness trace: oldest reading at the left

@@ -57,7 +57,9 @@ alongside your normal Ride profile even via a background service.
   older history coarser, same idea as how a browser's zoomed-out
   performance graph works.
 - **`source/RoadQualityView.mc`** — a single screen showing recording
-  status, the three current values, and the live history graph.
+  status, the three current values, the live history graph, and (in a
+  smaller font below the graph) speed, distance, elapsed time, and heart
+  rate, read from `Activity.getActivityInfo()`.
 - **`source/RoadQualityDelegate.mc`** — tap the screen (or press the
   physical select button) to start recording; tap again to stop and save.
 - **`tools/fit_to_json.py`** — a Python script you run afterwards on a
