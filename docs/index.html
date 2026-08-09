@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DS2.0 Road Roughness Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel-bg: #ffffff;
+    --text: #1c1f26;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161c;
+      --panel-bg: #1c1f27;
+      --text: #ecedf0;
+      --muted: #9aa0ab;
+      --border: #2c303a;
+      --accent: #5b9bff;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 1.05rem;
+    margin: 0;
+    font-weight: 600;
+  }
+  header .sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .btn:hover { opacity: 0.9; }
+  select {
+    background: var(--panel-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+  #main {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  #map {
+    position: absolute;
+    inset: 0;
+  }
+  #dropzone {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    z-index: 500;
+    text-align: center;
+    padding: 2rem;
+  }
+  #dropzone.hidden { display: none; }
+  #dropzone .box {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 3rem 2.5rem;
+    max-width: 420px;
+  }
+  #dropzone .box.drag-over {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  #dropzone p {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  #dropzone code {
+    background: var(--border);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  #stats {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 400;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.8rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    max-width: 260px;
+  }
+  #stats.hidden { display: none; }
+  #stats dl {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.15rem 0.8rem;
+    margin: 0;
+  }
+  #stats dt { color: var(--muted); }
+  #stats dd { margin: 0; font-weight: 600; text-align: right; }
+  #legend {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 400;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  }
+  #legend.hidden { display: none; }
+  #legend .bar {
+    width: 160px;
+    height: 10px;
+    border-radius: 5px;
+    margin: 0.35rem 0;
+    background: linear-gradient(to right, #2ecc71, #f1c40f, #e74c3c);
+  }
+  #legend .labels {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+  }
+  #error {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 600;
+    background: #e74c3c;
+    color: white;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    max-width: 90%;
+  }
+  #error.hidden { display: none; }
+  .leaflet-popup-content { font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>DS2.0 Road Roughness Map</h1>
+      <div class="sub">Route colored by road-surface roughness, from a ride recorded with the DS2.0 Road Quality Index app</div>
+    </div>
+    <div id="controls" class="hidden">
+      <select id="fieldSelect"></select>
+      <button class="btn" id="loadAnotherBtn">Load another file</button>
+    </div>
+  </header>
+  <div id="main">
+    <div id="map"></div>
+
+    <div id="dropzone">
+      <div class="box" id="dropbox">
+        <p style="color: var(--text); font-weight: 600; margin-top: 0;">Load a ride to get started</p>
+        <p>
+          Drop a <code>ride.json</code> file here, or click to choose one.<br><br>
+          Produce it from a <code>.FIT</code> file recorded with either DS2.0 Road Quality Index app using:
+        </p>
+        <p><code>python3 tools/fit_to_json.py ride.fit ride.json</code></p>
+        <input type="file" id="fileInput" accept="application/json,.json" style="margin-top: 0.5rem;">
+      </div>
+    </div>
+
+    <div id="stats" class="hidden"></div>
+    <div id="legend" class="hidden">
+      <div id="legendTitle" style="font-weight: 600;">Roughness (g)</div>
+      <div class="bar"></div>
+      <div class="labels">
+        <span id="legendMin">0.00</span>
+        <span id="legendMax">0.00</span>
+      </div>
+    </div>
+
+    <div id="error" class="hidden"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(function () {
+  "use strict";
+
+  // Preference order when a file has more than one roughness field
+  // present (e.g. app/'s three rolling averages) - falls back to
+  // whatever is actually available.
+  var FIELD_PRIORITY = [
+    "roughness_trip_g",
+    "roughness_trip_avg_g",
+    "roughness_5min_g",
+    "roughness_snapshot_g",
+    "roughness_1min_g"
+  ];
+
+  var FIELD_LABELS = {
+    roughness_1min_g: "1-minute rolling average",
+    roughness_5min_g: "5-minute rolling average",
+    roughness_trip_g: "Trip average (continuous)",
+    roughness_snapshot_g: "Latest 5-min snapshot",
+    roughness_trip_avg_g: "Trip average (5-min snapshots)"
+  };
+
+  var map = null;
+  var currentField = null;
+  var currentRecords = null;
+
+  function showError(message) {
+    var el = document.getElementById("error");
+    el.textContent = message;
+    el.classList.remove("hidden");
+    setTimeout(function () { el.classList.add("hidden"); }, 6000);
+  }
+
+  function initMap() {
+    if (map) { return; }
+    map = L.map("map", { zoomControl: true }).setView([50.85, 4.35], 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
+    }).addTo(map);
+  }
+
+  function roughnessColor(value, min, max) {
+    var t = max > min ? (value - min) / (max - min) : 0;
+    t = Math.max(0, Math.min(1, t));
+    var r, g;
+    if (t < 0.5) {
+      r = Math.round(255 * (t / 0.5));
+      g = 255;
+    } else {
+      r = 255;
+      g = Math.round(255 * (1 - (t - 0.5) / 0.5));
+    }
+    return "rgb(" + r + "," + g + ",0)";
+  }
+
+  function pickDefaultField(present) {
+    for (var i = 0; i < FIELD_PRIORITY.length; i += 1) {
+      if (present.indexOf(FIELD_PRIORITY[i]) !== -1) {
+        return FIELD_PRIORITY[i];
+      }
+    }
+    return present.length > 0 ? present[0] : null;
+  }
+
+  // Forward-fills gaps between infrequent snapshots (e.g. the data field's
+  // ~5-minute cadence) so the whole route still gets colored, not just
+  // the exact points where a fresh sample landed.
+  function forwardFillField(records, field) {
+    var last = null;
+    var out = [];
+    for (var i = 0; i < records.length; i += 1) {
+      var v = records[i][field];
+      if (v !== null && v !== undefined) {
+        last = v;
+      }
+      out.push(last);
+    }
+    return out;
+  }
+
+  function formatDuration(seconds) {
+    seconds = Math.round(seconds);
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    var s = seconds % 60;
+    if (h > 0) {
+      return h + "h " + m + "m";
+    }
+    return m + "m " + s + "s";
+  }
+
+  function renderStats(records, values, field, data) {
+    var withGps = records.filter(function (r) { return r.lat !== null && r.lon !== null; });
+    var known = [];
+    for (var i = 0; i < records.length; i += 1) {
+      if (values[i] !== null && records[i].lat !== null) { known.push(values[i]); }
+    }
+    var avg = known.length ? known.reduce(function (a, b) { return a + b; }, 0) / known.length : null;
+    var max = known.length ? Math.max.apply(null, known) : null;
+
+    var durationSec = null;
+    if (records.length >= 2) {
+      durationSec = records[records.length - 1].epoch - records[0].epoch;
+    }
+
+    var distanceKm = null;
+    if (withGps.length >= 2) {
+      var d = 0;
+      for (var j = 1; j < withGps.length; j += 1) {
+        d += haversine(withGps[j - 1].lat, withGps[j - 1].lon, withGps[j].lat, withGps[j].lon);
+      }
+      distanceKm = d;
+    }
+
+    var html = "<dl>";
+    html += "<dt>File</dt><dd>" + escapeHtml(data.source_fit_file || "-") + "</dd>";
+    html += "<dt>Metric</dt><dd>" + escapeHtml(FIELD_LABELS[field] || field) + "</dd>";
+    if (avg !== null) { html += "<dt>Average</dt><dd>" + avg.toFixed(2) + " g</dd>"; }
+    if (max !== null) { html += "<dt>Max</dt><dd>" + max.toFixed(2) + " g</dd>"; }
+    if (distanceKm !== null) { html += "<dt>Distance</dt><dd>" + distanceKm.toFixed(1) + " km</dd>"; }
+    if (durationSec !== null) { html += "<dt>Duration</dt><dd>" + formatDuration(durationSec) + "</dd>"; }
+    html += "<dt>GPS points</dt><dd>" + withGps.length + " / " + records.length + "</dd>";
+    html += "</dl>";
+
+    var statsEl = document.getElementById("stats");
+    statsEl.innerHTML = html;
+    statsEl.classList.remove("hidden");
+  }
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    var R = 6371; // km
+    var toRad = function (d) { return (d * Math.PI) / 180; };
+    var dLat = toRad(lat2 - lat1);
+    var dLon = toRad(lon2 - lon1);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement("div");
+    div.textContent = String(s);
+    return div.innerHTML;
+  }
+
+  var routeLayer = null;
+
+  function renderField(data, field) {
+    currentField = field;
+    var records = data.road_quality;
+    var values = forwardFillField(records, field);
+
+    var withGps = [];
+    for (var i = 0; i < records.length; i += 1) {
+      if (records[i].lat !== null && records[i].lon !== null && values[i] !== null) {
+        withGps.push({ lat: records[i].lat, lon: records[i].lon, value: values[i], ts: records[i].timestamp });
+      }
+    }
+
+    if (routeLayer) {
+      map.removeLayer(routeLayer);
+      routeLayer = null;
+    }
+
+    var legendEl = document.getElementById("legend");
+    if (withGps.length < 2) {
+      legendEl.classList.add("hidden");
+      renderStats(records, values, field, data);
+      showError("This file has fewer than 2 GPS points for the selected metric - nothing to draw on the map yet.");
+      return;
+    }
+
+    var min = withGps[0].value;
+    var max = withGps[0].value;
+    for (var j = 1; j < withGps.length; j += 1) {
+      if (withGps[j].value < min) { min = withGps[j].value; }
+      if (withGps[j].value > max) { max = withGps[j].value; }
+    }
+
+    routeLayer = L.layerGroup();
+    for (var k = 1; k < withGps.length; k += 1) {
+      var p1 = withGps[k - 1];
+      var p2 = withGps[k];
+      var avgValue = (p1.value + p2.value) / 2;
+      var seg = L.polyline(
+        [[p1.lat, p1.lon], [p2.lat, p2.lon]],
+        { color: roughnessColor(avgValue, min, max), weight: 5, opacity: 0.85 }
+      );
+      seg.bindPopup(
+        "<b>" + avgValue.toFixed(2) + " g</b><br>" + escapeHtml(p2.ts || "")
+      );
+      routeLayer.addLayer(seg);
+    }
+    routeLayer.addTo(map);
+
+    var bounds = L.latLngBounds(withGps.map(function (p) { return [p.lat, p.lon]; }));
+    map.fitBounds(bounds, { padding: [30, 30] });
+
+    document.getElementById("legendTitle").textContent = (FIELD_LABELS[field] || field);
+    document.getElementById("legendMin").textContent = min.toFixed(2) + " g";
+    document.getElementById("legendMax").textContent = max.toFixed(2) + " g";
+    legendEl.classList.remove("hidden");
+
+    renderStats(records, values, field, data);
+  }
+
+  function loadData(data) {
+    initMap();
+
+    var present = data.roughness_fields_present || [];
+    if (present.length === 0) {
+      showError("This file has no roughness data in it - was it recorded with one of the DS2.0 apps?");
+    }
+
+    var select = document.getElementById("fieldSelect");
+    select.innerHTML = "";
+    present.forEach(function (f) {
+      var opt = document.createElement("option");
+      opt.value = f;
+      opt.textContent = FIELD_LABELS[f] || f;
+      select.appendChild(opt);
+    });
+    select.onchange = function () {
+      renderField(data, select.value);
+    };
+
+    document.getElementById("dropzone").classList.add("hidden");
+    document.getElementById("controls").classList.remove("hidden");
+
+    var defaultField = pickDefaultField(present);
+    if (defaultField) {
+      select.value = defaultField;
+      renderField(data, defaultField);
+    }
+  }
+
+  function handleFile(file) {
+    if (!file) { return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        loadData(data);
+      } catch (e) {
+        showError("Couldn't parse that file as JSON: " + e.message);
+      }
+    };
+    reader.onerror = function () {
+      showError("Couldn't read that file.");
+    };
+    reader.readAsText(file);
+  }
+
+  var fileInput = document.getElementById("fileInput");
+  fileInput.addEventListener("change", function (e) {
+    handleFile(e.target.files[0]);
+  });
+
+  var dropbox = document.getElementById("dropbox");
+  ["dragenter", "dragover"].forEach(function (evt) {
+    dropbox.addEventListener(evt, function (e) {
+      e.preventDefault();
+      dropbox.classList.add("drag-over");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    dropbox.addEventListener(evt, function (e) {
+      e.preventDefault();
+      dropbox.classList.remove("drag-over");
+    });
+  });
+  dropbox.addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  document.getElementById("loadAnotherBtn").addEventListener("click", function () {
+    document.getElementById("dropzone").classList.remove("hidden");
+    document.getElementById("controls").classList.add("hidden");
+    document.getElementById("stats").classList.add("hidden");
+    document.getElementById("legend").classList.add("hidden");
+    fileInput.value = "";
+  });
+
+  initMap();
+})();
+</script>
+</body>
+</html>

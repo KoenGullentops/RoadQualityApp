@@ -7,6 +7,7 @@ Edge 1030 Plus's accelerometer, for two different use cases:
 |---|---|---|---|
 | `app/` | Standalone watch app, owns its own recording session | Continuous (1 Hz) | Dedicated "road quality" rides where you don't need your normal ride screens |
 | `datafield/` | A tile you add to your normal Ride activity screen | ~Every 5 minutes | Everyday rides where you still want power/HR/maps/etc., plus a lightweight roughness reading |
+| `docs/` | Static web app (GitHub Pages) | — | View a ride's route on a map, colored by roughness, from the JSON either app produces |
 
 ## Why two apps, and why the data field only updates every 5 minutes
 
@@ -214,7 +215,9 @@ Works the same regardless of which app recorded the ride:
    pip install -r tools/requirements.txt
    python3 tools/fit_to_json.py path/to/ride.fit ride.json
    ```
-3. Move `ride.json` to your iPhone (AirDrop, Files, email, etc.).
+3. Move `ride.json` to your iPhone (AirDrop, Files, email, etc.), or open
+   it with **`docs/index.html`** — see [`docs/README.md`](docs/README.md)
+   — to see the route on a map, colored by roughness.
 
 ### Output JSON shape
 
