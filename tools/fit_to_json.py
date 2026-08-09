@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Convert a Road Quality FIT file (recorded with one or more of the
-RoadQualityApp Connect IQ data fields active on a ride) into a JSON file
-with the GPS track and the rolling road-roughness averages each field
-computed and wrote into the FIT file as developer fields.
+Convert a Road Quality FIT file (recorded with the RoadQualityApp Connect IQ
+app) into a JSON file with the GPS track and the three rolling
+road-roughness averages (1 min / 5 min / trip) the app wrote into the FIT
+file as developer fields.
 
 Usage:
     python3 fit_to_json.py ride.fit ride.json
@@ -21,9 +21,8 @@ from fitparse import FitFile
 RECORD_MESG = "record"
 SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
 
-# Each entry is a data field project's developer field name -> the JSON key
-# it's reported under. A ride may have any subset of these three fields
-# active, since each is a separately-added tile.
+# Developer field name -> the JSON key it's reported under. All three are
+# written by the same app/session, so they're normally all present together.
 ROUGHNESS_FIELDS = {
     "roughness_1min_g": "roughness_1min_g",
     "roughness_5min_g": "roughness_5min_g",
@@ -87,8 +86,7 @@ def main():
 
     if not present_fields:
         print("Warning: no records with any road-roughness developer field were found. "
-              "Was at least one Road Roughness data field actually added to the "
-              "activity screen during this ride?", file=sys.stderr)
+              "Was this ride recorded with the Road Quality app?", file=sys.stderr)
 
     output = {
         "source_fit_file": args.fit_file,

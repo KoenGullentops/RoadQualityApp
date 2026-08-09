@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
     <iq:application
-        id="718055c38e4b4032bc478f6e9a9eb7e7"
-        type="datafield"
+        id="645f33a05c784f2fa7ebe321e1028652"
+        type="watch-app"
         name="@Strings.AppName"
         entry="RoadQualityApp"
         launcherIcon="@Drawables.LauncherIcon"
@@ -12,6 +12,7 @@
         </iq:products>
         <iq:permissions>
             <iq:uses-permission id="Sensor"/>
+            <iq:uses-permission id="Fit"/>
             <iq:uses-permission id="FitContributor"/>
         </iq:permissions>
         <iq:languages>

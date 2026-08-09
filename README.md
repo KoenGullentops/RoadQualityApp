@@ -1,94 +1,95 @@
 # Road Quality App (Garmin Edge 1030 Plus)
 
-Three Connect IQ **data fields** (a "tile" in your Ride activity screen)
-that read the live accelerometer and show a rolling average road-surface
-roughness score over three different windows, so they can be mapped
-against your GPS track afterwards:
+A standalone Connect IQ **watch app** that reads the live accelerometer
+during a ride and shows three rolling road-surface roughness averages —
+last 1 minute, last 5 minutes, and since the ride started — so they can be
+mapped against your GPS track afterwards.
 
-| Project | Tile name | Window |
-|---|---|---|
-| `fields/roughness-1min/` | Road Roughness (1 min) | trailing 60 seconds |
-| `fields/roughness-5min/` | Road Roughness (5 min) | trailing 5 minutes |
-| `fields/roughness-trip/` | Road Roughness (Trip)  | cumulative since activity start |
+## Why a standalone app, not a data field
 
-They're three separate, independently-installable apps (Connect IQ data
-fields each present as one selectable tile, so three different rolling
-windows need three apps) — add any or all of them to your Ride activity
-screen's field slots.
+This started as a Data Field ("tile" you add to your normal Ride activity
+screen), but that turned out to be architecturally impossible on this
+device: **Data Fields cannot read accelerometer data on Edge devices, by
+any method.** This was confirmed directly, from an on-device crash log:
+
+```
+Error: Permission Required
+Details: "Symbol 'registerSensorDataListener' not available to 'Data Field'"
+```
+
+and independently corroborated by other developers' reports that the
+older polling API (`Sensor.getInfo()`) crashes from a Data Field too, and
+that `SensorHistory` (which would have been a workaround, since it logs
+sensor data at the OS level regardless of which app is in the foreground)
+doesn't exist on Edge devices at all.
+
+The only Connect IQ app type that can read live accelerometer data is one
+that owns its own `Toybox.ActivityRecording` session — i.e. a standalone
+app, not a data field. The trade-off: you start "Road Quality" as its own
+recording instead of adding it to your existing Ride activity profile, so
+you won't see your other usual fields (power, HR zones, maps, etc.) while
+it's recording.
 
 ## How it works
 
-Each project's `source/RoadQualityField.mc` uses
-`Toybox.Sensor.registerSensorDataListener` to read live accelerometer
-samples, and once per second (`compute()`) turns them into an instantaneous
-roughness value: the RMS of `|acceleration| - 1g` (how far the total
-acceleration deviates from gravity). Each tile then folds that
-once-per-second value into its own average:
+- **`source/RoadQualityRecorder.mc`** — owns the FIT recording session,
+  reads live accelerometer via `Sensor.registerSensorDataListener` (which
+  *is* allowed for a plain watch app), and once per second (via a 1 Hz
+  timer) turns the accumulated samples into an instantaneous roughness
+  value: the RMS of `|acceleration| - 1g` (how far the total acceleration
+  deviates from gravity). That value then feeds three running averages:
+  - **1 min / 5 min**: a ring buffer of the last 60 / 300 per-second
+    values (a true sliding window, O(1) per update).
+  - **Trip**: a running sum/count since recording started.
 
-- **1 min / 5 min**: a ring buffer of the last 60 / 300 per-second values,
-  averaged (a true sliding window).
-- **Trip**: a running sum/count since the field was initialized (i.e.
-  since the activity started).
-
-Each tile shows its average on screen and also writes it into the ride's
-`.FIT` file every second as its own "developer field"
-(`roughness_1min_g` / `roughness_5min_g` / `roughness_trip_g`), via
-`Toybox.FitContributor`.
-
-(An earlier version of this project tried to log *raw* accelerometer
-samples via `Toybox.SensorLogging.SensorLogger`, which requires the app to
-create its own FIT recording session — meaning it had to be a standalone
-app, not a data field, and it lost your normal Ride profile's other
-fields/screens while recording. `FitContributor`, used here, works from
-inside a Data Field precisely because it contributes to a session it
-doesn't own, at the cost of only carrying one computed value per second
-rather than every raw sample.)
-
-**`tools/fit_to_json.py`** — a Python script you run afterwards on a
-computer to parse a ride's `.FIT` file and produce a `.json` file with the
-GPS track and whichever of the three rolling averages were active during
-that ride. You then move the JSON to your iPhone however you like
-(AirDrop, Files, email, etc.).
+  All three are written into the session's FIT file every second as
+  developer fields (`roughness_1min_g`, `roughness_5min_g`,
+  `roughness_trip_g`) via `Toybox.FitContributor`.
+- **`source/RoadQualityView.mc`** — a single screen showing recording
+  status and the three current values.
+- **`source/RoadQualityDelegate.mc`** — tap the screen (or press the
+  physical select button) to start recording; tap again to stop and save.
+- **`tools/fit_to_json.py`** — a Python script you run afterwards on a
+  computer to parse the ride's `.FIT` file and produce a `.json` file with
+  the GPS track and the three roughness averages, ready to move to your
+  iPhone (AirDrop, Files, email, etc.).
 
 ## Building and installing
 
-Each of the three folders under `fields/` is a self-contained Connect IQ
-project (its own `manifest.xml` + `monkey.jungle`). Build and sideload
-each one the same way, once per tile you want:
-
 1. Install VS Code + the [Monkey C extension](https://developer.garmin.com/connect-iq/monkey-c/),
-   and use its guided setup (SDK Manager → download an SDK → download
-   devices → Verify Installation) until "Monkey C: Verify Installation"
-   reports success.
-2. Command Palette → **"Monkey C: Generate a Developer Key"** (one-time
-   for the whole machine; the same key signs all three projects — save the
-   `.der` file outside the repo, it's gitignored on purpose).
-3. Open one of `fields/roughness-1min/`, `fields/roughness-5min/`, or
-   `fields/roughness-trip/` as the VS Code workspace folder (File → Open
-   Folder).
+   and use its guided setup until "Monkey C: Verify Installation" reports
+   success.
+2. Open this repo folder as the VS Code workspace root (it has
+   `manifest.xml` and `monkey.jungle` at the top level).
+3. Command Palette → **"Monkey C: Generate a Developer Key"** if you don't
+   already have one — save it **outside** the repo (a previous key got
+   accidentally committed and then deleted by a `git pull`; keeping it
+   outside the repo means git can never touch it).
 4. Command Palette → **"Monkey C: Set Active Device"** → **edge1030plus**.
 5. Build: **F5**, or Command Palette → **"Monkey C: Build Current Project"**.
 6. Sideload: connect the Edge 1030 Plus over USB, copy the built `.prg`
-   into `GARMIN/APPS/` on the device, then eject.
-7. Repeat steps 3–6 for the other two folders.
-8. On the device: open a Ride activity's field layout editor, and for each
-   empty field slot you want to use, choose the matching **Road Roughness
-   (…)** entry from the list of data fields.
+   from `bin/` into `GARMIN/APPS/` on the device, then eject.
+7. **Remove the old data field builds** if you sideloaded any of the
+   `roughness-1min` / `roughness-5min` / `roughness-trip` data fields from
+   the earlier design — they can't work and should be deleted from
+   `GARMIN/APPS/` (and removed from any field slots they were added to).
+8. On the device, find **Road Quality** in your installed apps (not in the
+   data field picker — it's a regular app) and launch it.
 
-Each manifest requests only the `Sensor` permission and targets
-`minSdkVersion 3.3.0`. I validated the FIT-writing side of this design (all
-three developer fields resolving correctly by name, alongside GPS, in the
-ride's FIT `record` messages) against the real Garmin FIT field profile
-using a synthetic test file, and validated `fit_to_json.py` end-to-end
-against it — but the Monkey C source itself hasn't been run in the actual
-Connect IQ simulator, so build each one there first and watch for API
-errors before your first real ride.
+The manifest requests `Sensor` (accelerometer), `Fit` (creating an
+`ActivityRecording` session), and `FitContributor` (writing the three
+developer fields) permissions, and targets `minSdkVersion 3.3.0`. The
+`type="watch-app"` value and the permission names were verified against
+real, current Garmin-generated manifests before use, since an earlier
+guess (`type="dataField"`, camelCase) turned out to be wrong.
 
 ## Recording a ride
 
-Nothing special — start your Ride activity as normal with whichever Road
-Roughness tile(s) you added showing on screen. Each updates roughly once a
-second.
+1. Launch **Road Quality** on the device.
+2. Tap the screen to start recording. The screen shows "RECORDING" and the
+   three live roughness values.
+3. Ride.
+4. Tap the screen again to stop and save the activity.
 
 ## Getting the FIT file and converting it
 
@@ -106,23 +107,20 @@ second.
 ```jsonc
 {
   "source_fit_file": "ride.fit",
-  "generated_at": "2026-08-08T14:52:59+00:00",
+  "generated_at": "2026-08-09T14:52:59+00:00",
   "record_count": 1830,
-  "roughness_fields_present": ["roughness_1min_g", "roughness_trip_g"],
+  "roughness_fields_present": ["roughness_1min_g", "roughness_5min_g", "roughness_trip_g"],
   "road_quality": [
-    { "timestamp": "2026-08-08T14:52:37+00:00", "epoch": 1786200757.0,
+    { "timestamp": "2026-08-09T14:52:37+00:00", "epoch": 1786200757.0,
       "lat": 50.85, "lon": 4.35, "speed_mps": 6.1,
-      "roughness_1min_g": 0.11, "roughness_5min_g": null, "roughness_trip_g": 0.09 },
+      "roughness_1min_g": 0.11, "roughness_5min_g": 0.09, "roughness_trip_g": 0.10 },
     ...
   ]
 }
 ```
 
-`roughness_fields_present` lists only the tiles that actually had a value
-on this ride — a field is `null` on every record if that tile wasn't added
-to the screen during that ride (FitContributor only writes a value while
-its data field is active/showing). If `roughness_fields_present` is empty,
-none of the three tiles were on screen for this ride.
+If `roughness_fields_present` is empty, the ride wasn't recorded with this
+app (e.g. it's a normal Ride activity FIT file).
 
 ## Known caveats
 
@@ -132,12 +130,11 @@ none of the three tiles were on screen for this ride.
   same magnitude regardless of orientation.
 - The accelerometer's live sample rate/callback cadence is fixed by the
   hardware/firmware; there's no Connect IQ API to request a specific rate.
-- The 1-min/5-min windows are sliding windows over the last 60/300
-  `compute()` calls, which Connect IQ calls once per second — not
-  wall-clock-timestamped, so they assume compute() cadence stays at 1 Hz
-  (the documented/standard behavior for data fields).
-- This project's Monkey C code was written and reviewed against the public
-  Connect IQ API docs and known example patterns (`createField` +
-  `FitContributor`, `Sensor.registerSensorDataListener`), but not compiled
-  or run in the simulator in the environment this was written in. Build it
-  in the simulator before your first real ride.
+- Recording with this app replaces your normal Ride activity profile for
+  that ride — you won't see your usual power/HR/map screens while it's
+  recording, only the Road Quality screen.
+- This project's Monkey C code has been built and run on real Edge 1030
+  Plus hardware (that's how the Data-Field-vs-accelerometer restriction
+  was discovered), but the *current* standalone-app rewrite hasn't been
+  tested on-device yet — build it and try a short ride before trusting it
+  for a real one.
