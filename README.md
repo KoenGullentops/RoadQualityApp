@@ -65,14 +65,28 @@ alongside your normal Ride profile even via a background service.
   Swipe or press the page button to open the map screen.
 - **`source/RoadQualityMapView.mc`** / **`RoadQualityMapDelegate.mc`** — a
   second screen showing a real onboard map (`Toybox.WatchUi.MapView`,
-  available on devices with onboard cartography like the Edge 1030 Plus)
-  with the ride's GPS breadcrumb trail drawn on top as a polyline. Tap,
-  select, or back returns to the main screen. **Known risk**: Garmin's own
-  bug tracker has reports of `MapView`/`MapTrackView` simply not rendering
-  on some devices/firmware, independent of app code — if the map screen
-  comes up blank, that's a plausible platform issue rather than a bug
-  here. The GPS trail uses the same bounded-buffer technique as the
-  roughness graph, applied to lat/lon instead of a single value.
+  available on devices with onboard cartography like the Edge 1030 Plus),
+  in `MAP_MODE_BROWSE` (full cartography, not the simplified
+  `MAP_MODE_PREVIEW`). Tap, select, or back returns to the main screen.
+
+  If a **Course** is loaded on the device (plan a route in Garmin Connect
+  — which accepts GPX import — and sync it over, same as any normal
+  Garmin navigation course; this app doesn't need its own upload feature
+  since that pipeline already exists), it's drawn as the route to follow,
+  with a marker for your live position. Otherwise it falls back to
+  drawing your own GPS breadcrumb trail so far, using the same
+  bounded-buffer technique as the roughness graph, applied to lat/lon
+  instead of a single value.
+
+  **Known risk**: Garmin's own bug tracker has reports of
+  `MapView`/`MapTrackView` simply not rendering on some devices/firmware,
+  independent of app code — if the map comes up as a flat color with
+  nothing on it, try opening the device's native Map screen once first
+  (lets it cache map tiles for the area) before launching this app; if it
+  still fails, that's a plausible platform issue rather than a bug here.
+  The course-reading calls (`readCoordinates`/`getCoordinateCount`) are
+  the least-verified API in this whole app — if they're wrong, the error
+  will show on the main screen's status line rather than crashing.
 - **`tools/fit_to_json.py`** — a Python script you run afterwards on a
   computer to parse the ride's `.FIT` file and produce a `.json` file with
   the GPS track and the three roughness averages, ready to move to your
@@ -102,8 +116,9 @@ alongside your normal Ride profile even via a background service.
 
 The manifest requests `Sensor` (accelerometer), `Fit` (creating an
 `ActivityRecording` session), `FitContributor` (writing the three
-developer fields), and `Positioning` (GPS-derived speed/distance/map
-track) permissions, and targets `minSdkVersion 3.3.0`. The
+developer fields), `Positioning` (GPS-derived speed/distance/map track),
+and `PersistedContent` (reading a loaded Course for the map screen)
+permissions, and targets `minSdkVersion 3.3.0`. The
 `type="watch-app"` value and the permission names were verified against
 real, current Garmin-generated manifests before use, since an earlier
 guess (`type="dataField"`, camelCase) turned out to be wrong.

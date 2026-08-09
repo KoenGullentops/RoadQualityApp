@@ -20,6 +20,9 @@ class RoadQualityView extends Ui.View {
         var h = dc.getHeight();
 
         dc.drawText(w / 2, h * 0.04, Gfx.FONT_XTINY, "DS2.0 Road Quality Index", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawLine((w * 0.15).toNumber(), (h * 0.075).toNumber(), (w * 0.85).toNumber(), (h * 0.075).toNumber());
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
 
         var error = recorder.getLastError();
         if (error != null) {
