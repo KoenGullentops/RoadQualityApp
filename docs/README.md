@@ -7,10 +7,13 @@ colored by road-surface roughness — green (smooth) through yellow to red
 
 ## Using it
 
-1. Open this page (locally via `index.html`, or the published GitHub
-   Pages URL — see below) and drop the `.FIT` file straight from your
-   device onto it, or click to choose the file. It's decoded entirely in
-   your browser using Garmin's official FIT JavaScript SDK
+Opening the page shows a bundled sample ride (`sample/sample-ride.fit`)
+right away, so there's something on the map immediately instead of an
+empty dropzone — the header notes it's a demo.
+
+1. Drop your own `.FIT` file straight from your device onto the page (or
+   click **Load another file** first, then drop/choose it). It's decoded
+   entirely in your browser using Garmin's official FIT JavaScript SDK
    (vendored into `vendor/fitsdk/`) — no conversion step needed.
 2. The route draws automatically, colored by whichever roughness metric
    the file has (if more than one is present — e.g. `app/`'s 1 min / 5
@@ -61,3 +64,9 @@ server-side dependencies.
   no network access at all except for the map tile images themselves
   (those still come from OpenStreetMap's tile servers, since
   redistributing map imagery isn't practical).
+- The default sample ride is embedded directly in `index.html` as base64
+  (`DEFAULT_RIDE_FIT_BASE64`), not fetched as a separate file — `fetch()`
+  of a relative file fails under `file://` in Chromium, so embedding it
+  is what makes the demo ride show up identically whether the page is
+  opened from disk or served over GitHub Pages. `sample/sample-ride.fit`
+  is kept alongside it as the plain, inspectable source of that data.
