@@ -61,6 +61,20 @@ class RoadQualityRecorder {
         buffer1 = new [60] as Lang.Array<Lang.Float>;
         buffer5 = new [300] as Lang.Array<Lang.Float>;
 
+        sumSquaredDeviation = 0.0;
+        sampleCount = 0;
+
+        writeIndex1 = 0;
+        filledCount1 = 0;
+        ringSum1 = 0.0;
+
+        writeIndex5 = 0;
+        filledCount5 = 0;
+        ringSum5 = 0.0;
+
+        tripSum = 0.0;
+        tripCount = 0;
+
         value1min = 0.0;
         value5min = 0.0;
         valueTrip = 0.0;
@@ -68,6 +82,9 @@ class RoadQualityRecorder {
         resetAccumulators();
     }
 
+    // Re-zeroes everything for a fresh recording. Safe to call again from
+    // initialize() (the ring buffers are already allocated by then, this
+    // just zeroes their contents) as well as from start().
     hidden function resetAccumulators() as Void {
         sumSquaredDeviation = 0.0;
         sampleCount = 0;
