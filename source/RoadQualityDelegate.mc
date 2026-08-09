@@ -24,4 +24,14 @@ class RoadQualityDelegate extends Ui.BehaviorDelegate {
         return true;
     }
 
+    // Swipe or the physical page button opens the map screen.
+    function onNextPage() as Lang.Boolean {
+        Ui.pushView(
+            new RoadQualityMapView(recorder),
+            new RoadQualityMapDelegate(),
+            Ui.SLIDE_LEFT
+        );
+        return true;
+    }
+
 }

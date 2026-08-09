@@ -6,6 +6,7 @@ using Toybox.Timer as Timer;
 using Toybox.Math as Math;
 using Toybox.Lang as Lang;
 using Toybox.WatchUi as Ui;
+using Toybox.Position as Position;
 
 // Owns the FIT recording session, live accelerometer sampling, and the
 // three rolling road-roughness averages (1 min / 5 min / trip). A
@@ -65,6 +66,19 @@ class RoadQualityRecorder {
     hidden var historyBucketSum as Lang.Float;
     hidden var historyBucketCount as Lang.Number;
 
+    // GPS breadcrumb trail for the map screen: same bounded/downsampling
+    // technique as the roughness history, applied to lat/lon instead of a
+    // single scalar - so a ride of any length still fits in a fixed
+    // number of points.
+    hidden const GPS_HISTORY_MAX as Lang.Number = 120;
+    hidden var gpsLat as Lang.Array<Lang.Float>;
+    hidden var gpsLon as Lang.Array<Lang.Float>;
+    hidden var gpsCount as Lang.Number;
+    hidden var gpsBucketTarget as Lang.Number;
+    hidden var gpsBucketLatSum as Lang.Float;
+    hidden var gpsBucketLonSum as Lang.Float;
+    hidden var gpsBucketCount as Lang.Number;
+
     // Set when start() fails, so the view can show what went wrong
     // instead of the app just crashing to the system error screen.
     hidden var lastError as Lang.String?;
@@ -78,6 +92,8 @@ class RoadQualityRecorder {
         buffer1 = new [60] as Lang.Array<Lang.Float>;
         buffer5 = new [300] as Lang.Array<Lang.Float>;
         history = new [HISTORY_MAX] as Lang.Array<Lang.Float>;
+        gpsLat = new [GPS_HISTORY_MAX] as Lang.Array<Lang.Float>;
+        gpsLon = new [GPS_HISTORY_MAX] as Lang.Array<Lang.Float>;
 
         sumSquaredDeviation = 0.0;
         sampleCount = 0;
@@ -98,6 +114,12 @@ class RoadQualityRecorder {
         historyBucketTarget = 1;
         historyBucketSum = 0.0;
         historyBucketCount = 0;
+
+        gpsCount = 0;
+        gpsBucketTarget = 1;
+        gpsBucketLatSum = 0.0;
+        gpsBucketLonSum = 0.0;
+        gpsBucketCount = 0;
 
         value1min = 0.0;
         value5min = 0.0;
@@ -135,6 +157,12 @@ class RoadQualityRecorder {
         historyBucketTarget = 1;
         historyBucketSum = 0.0;
         historyBucketCount = 0;
+
+        gpsCount = 0;
+        gpsBucketTarget = 1;
+        gpsBucketLatSum = 0.0;
+        gpsBucketLonSum = 0.0;
+        gpsBucketCount = 0;
     }
 
     function isRecording() as Lang.Boolean {
@@ -297,8 +325,57 @@ class RoadQualityRecorder {
         if (fieldTrip != null) { fieldTrip.setData(valueTrip); }
 
         recordHistory(instant);
+        recordGpsBreadcrumb();
 
         Ui.requestUpdate();
+    }
+
+    // Folds the current GPS fix (if any) into the breadcrumb trail used
+    // by the map screen, once per second alongside everything else.
+    hidden function recordGpsBreadcrumb() as Void {
+        var info = Activity.getActivityInfo();
+        if (info == null) {
+            return;
+        }
+
+        var loc = info.currentLocation;
+        var quality = info.currentLocationAccuracy;
+        if (loc == null || quality == null || quality == Position.QUALITY_NOT_AVAILABLE) {
+            return;
+        }
+
+        var degrees = loc.toDegrees();
+        recordGpsPoint(degrees[0], degrees[1]);
+    }
+
+    hidden function recordGpsPoint(lat as Lang.Float, lon as Lang.Float) as Void {
+        gpsBucketLatSum += lat;
+        gpsBucketLonSum += lon;
+        gpsBucketCount += 1;
+
+        if (gpsBucketCount < gpsBucketTarget) {
+            return;
+        }
+
+        var avgLat = gpsBucketLatSum / gpsBucketCount;
+        var avgLon = gpsBucketLonSum / gpsBucketCount;
+        gpsBucketLatSum = 0.0;
+        gpsBucketLonSum = 0.0;
+        gpsBucketCount = 0;
+
+        if (gpsCount >= GPS_HISTORY_MAX) {
+            var newCount = GPS_HISTORY_MAX / 2;
+            for (var i = 0; i < newCount; i += 1) {
+                gpsLat[i] = (gpsLat[2 * i] + gpsLat[2 * i + 1]) / 2.0;
+                gpsLon[i] = (gpsLon[2 * i] + gpsLon[2 * i + 1]) / 2.0;
+            }
+            gpsCount = newCount;
+            gpsBucketTarget *= 2;
+        }
+
+        gpsLat[gpsCount] = avgLat;
+        gpsLon[gpsCount] = avgLon;
+        gpsCount += 1;
     }
 
     // Folds one more once-per-second instantaneous reading into the
@@ -340,5 +417,9 @@ class RoadQualityRecorder {
     function getHistory() as Lang.Array<Lang.Float> { return history; }
     function getHistoryCount() as Lang.Number { return historyCount; }
     function getHistoryMaxValue() as Lang.Float { return historyMaxValue; }
+
+    function getGpsLat() as Lang.Array<Lang.Float> { return gpsLat; }
+    function getGpsLon() as Lang.Array<Lang.Float> { return gpsLon; }
+    function getGpsCount() as Lang.Number { return gpsCount; }
 
 }

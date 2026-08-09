@@ -56,12 +56,23 @@ alongside your normal Ride profile even via a background service.
   in a fixed amount of memory — recent history at higher resolution,
   older history coarser, same idea as how a browser's zoomed-out
   performance graph works.
-- **`source/RoadQualityView.mc`** — a single screen showing recording
-  status, the three current values, the live history graph, and (in a
-  smaller font below the graph) speed, distance, elapsed time, and heart
-  rate, read from `Activity.getActivityInfo()`.
+- **`source/RoadQualityView.mc`** — the main screen: recording status, the
+  three current values, the live history graph, and a large 2x2 grid
+  (speed, distance, elapsed time, heart rate) filling the space below,
+  read from `Activity.getActivityInfo()`.
 - **`source/RoadQualityDelegate.mc`** — tap the screen (or press the
   physical select button) to start recording; tap again to stop and save.
+  Swipe or press the page button to open the map screen.
+- **`source/RoadQualityMapView.mc`** / **`RoadQualityMapDelegate.mc`** — a
+  second screen showing a real onboard map (`Toybox.WatchUi.MapView`,
+  available on devices with onboard cartography like the Edge 1030 Plus)
+  with the ride's GPS breadcrumb trail drawn on top as a polyline. Tap,
+  select, or back returns to the main screen. **Known risk**: Garmin's own
+  bug tracker has reports of `MapView`/`MapTrackView` simply not rendering
+  on some devices/firmware, independent of app code — if the map screen
+  comes up blank, that's a plausible platform issue rather than a bug
+  here. The GPS trail uses the same bounded-buffer technique as the
+  roughness graph, applied to lat/lon instead of a single value.
 - **`tools/fit_to_json.py`** — a Python script you run afterwards on a
   computer to parse the ride's `.FIT` file and produce a `.json` file with
   the GPS track and the three roughness averages, ready to move to your
@@ -90,8 +101,9 @@ alongside your normal Ride profile even via a background service.
    data field picker — it's a regular app) and launch it.
 
 The manifest requests `Sensor` (accelerometer), `Fit` (creating an
-`ActivityRecording` session), and `FitContributor` (writing the three
-developer fields) permissions, and targets `minSdkVersion 3.3.0`. The
+`ActivityRecording` session), `FitContributor` (writing the three
+developer fields), and `Positioning` (GPS-derived speed/distance/map
+track) permissions, and targets `minSdkVersion 3.3.0`. The
 `type="watch-app"` value and the permission names were verified against
 real, current Garmin-generated manifests before use, since an earlier
 guess (`type="dataField"`, camelCase) turned out to be wrong.
@@ -148,6 +160,10 @@ app (e.g. it's a normal Ride activity FIT file).
   recording, only the DS2.0 Road Quality Index screen.
 - This app's core recording (session, accelerometer sampling, the three
   rolling averages) has been built and run successfully on real Edge 1030
-  Plus hardware. The history graph is new and hasn't been tested on-device
-  yet — build it and check the graph draws sensibly before trusting it for
-  a real ride.
+  Plus hardware. The history graph, the 2x2 stats grid, and the map
+  screen are newer and haven't been tested on-device yet — build and try
+  each before trusting it for a real ride.
+- The map screen is the riskiest piece here (see above) — it's the first
+  feature in this app built against a Garmin API with known, documented
+  reliability issues on real hardware, rather than just an API we guessed
+  wrong about and could fix once we saw the error.
