@@ -127,6 +127,13 @@ code still can't touch the accelerometer at all).
   and a small "LAST UPDATED HH:MM" line showing when the background
   service last actually ran.
 
+  The background service also appends each snapshot to a persisted
+  history array (`Application.Storage` can hold a `Lang.Array`, capped at
+  100 points — over 8 hours of riding at one point per 5 minutes, oldest
+  dropped past that via `Array.slice()`), and the field draws it as a
+  small line graph below the numbers, same auto-scaling approach as
+  `app/`'s graph. Also cleared on `onTimerReset()`.
+
 This hasn't been tested on-device yet — the API shapes and background
 constraints are all verified against the local Connect IQ SDK docs, but
 the actual on-device timing (does the background wake reliably fire while

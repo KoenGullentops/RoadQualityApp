@@ -17,6 +17,10 @@ using Toybox.Time as Time;
 (:background)
 class RoadQualityServiceDelegate extends System.ServiceDelegate {
 
+    // At one point every 5 minutes, 100 points covers over 8 hours of
+    // riding before the oldest snapshot gets dropped.
+    hidden const HISTORY_MAX as Lang.Number = 100;
+
     function initialize() {
         ServiceDelegate.initialize();
     }
@@ -65,6 +69,14 @@ class RoadQualityServiceDelegate extends System.ServiceDelegate {
         var newCount = (tripCount == null ? 0 : tripCount as Lang.Number) + 1;
         Storage.setValue("tripSum", newSum);
         Storage.setValue("tripCount", newCount);
+
+        var stored = Storage.getValue("history");
+        var history = stored == null ? ([] as Lang.Array<Lang.Float>) : (stored as Lang.Array<Lang.Float>);
+        history.add(roughness);
+        if (history.size() > HISTORY_MAX) {
+            history = history.slice(1, null) as Lang.Array<Lang.Float>;
+        }
+        Storage.setValue("history", history);
 
         Background.exit(null);
     }

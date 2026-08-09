@@ -36,6 +36,7 @@ class RoadQualityField extends Ui.DataField {
         Storage.deleteValue("tripCount");
         Storage.deleteValue("lastRoughness");
         Storage.deleteValue("lastUpdatedAt");
+        Storage.deleteValue("history");
     }
 
     function compute(info) {
@@ -83,15 +84,58 @@ class RoadQualityField extends Ui.DataField {
         var lastText = last == null ? "--" : (last as Lang.Float).format("%.2f");
         var avgText = getTripAverage().format("%.2f");
 
-        dc.drawText(w / 2, h * 0.10, Gfx.FONT_XTINY, "Road Roughness (5 min)", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.07, Gfx.FONT_XTINY, "Road Roughness", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.20, Gfx.FONT_TINY,
+            "Latest " + lastText + "  Avg " + avgText + " g", Gfx.TEXT_JUSTIFY_CENTER);
 
-        dc.drawText(w / 2, h * 0.26, Gfx.FONT_XTINY, "Latest", Gfx.TEXT_JUSTIFY_CENTER);
-        dc.drawText(w / 2, h * 0.48, Gfx.FONT_NUMBER_MEDIUM, lastText, Gfx.TEXT_JUSTIFY_CENTER);
+        var graphX = (w * 0.06).toNumber();
+        var graphY = (h * 0.30).toNumber();
+        var graphW = (w * 0.88).toNumber();
+        var graphH = (h * 0.55).toNumber();
+        drawGraph(dc, graphX, graphY, graphW, graphH);
 
-        dc.drawText(w / 2, h * 0.64, Gfx.FONT_XTINY, "Trip avg", Gfx.TEXT_JUSTIFY_CENTER);
-        dc.drawText(w / 2, h * 0.82, Gfx.FONT_TINY, avgText + " g", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Gfx.COLOR_BLACK, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, h * 0.92, Gfx.FONT_XTINY, getLastUpdatedText(), Gfx.TEXT_JUSTIFY_CENTER);
+    }
 
-        dc.drawText(w / 2, h * 0.95, Gfx.FONT_XTINY, getLastUpdatedText(), Gfx.TEXT_JUSTIFY_CENTER);
+    // Trip-so-far roughness trace: oldest snapshot at the left edge,
+    // most recent at the right, y-axis auto-scaled to the highest
+    // snapshot seen so far this trip. Colors chosen for contrast against
+    // the field's white background.
+    hidden function drawGraph(dc as Gfx.Dc, x as Lang.Number, y as Lang.Number, w as Lang.Number, h as Lang.Number) as Void {
+        dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawRectangle(x, y, w, h);
+
+        var stored = Storage.getValue("history");
+        if (stored == null) {
+            dc.drawText(x + w / 2, y + h / 2, Gfx.FONT_XTINY, "No data yet", Gfx.TEXT_JUSTIFY_CENTER);
+            return;
+        }
+
+        var points = stored as Lang.Array<Lang.Float>;
+        var count = points.size();
+        if (count < 2) {
+            dc.drawText(x + w / 2, y + h / 2, Gfx.FONT_XTINY, "No data yet", Gfx.TEXT_JUSTIFY_CENTER);
+            return;
+        }
+
+        var maxValue = 0.05;
+        for (var i = 0; i < count; i += 1) {
+            if (points[i] > maxValue) { maxValue = points[i]; }
+        }
+
+        dc.setColor(Gfx.COLOR_DK_BLUE, Gfx.COLOR_TRANSPARENT);
+
+        var prevX = x;
+        var prevY = y + h - ((points[0] / maxValue) * h).toNumber();
+
+        for (var i = 1; i < count; i += 1) {
+            var px = x + (i * w) / (count - 1);
+            var py = y + h - ((points[i] / maxValue) * h).toNumber();
+            dc.drawLine(prevX, prevY, px, py);
+            prevX = px;
+            prevY = py;
+        }
     }
 
 }
