@@ -48,7 +48,7 @@ class RoadQualityField extends Ui.DataField {
     // compute() can produce an RMS without holding onto every raw sample.
     function onSensorData(sensorData as Sensor.SensorData) as Void {
         var accel = sensorData.accelerometerData;
-        if (accel == null || accel.x == null) {
+        if (accel == null || accel.x == null || accel.y == null || accel.z == null) {
             return;
         }
 
@@ -56,6 +56,8 @@ class RoadQualityField extends Ui.DataField {
         var ys = accel.y as Lang.Array<Lang.Number>;
         var zs = accel.z as Lang.Array<Lang.Number>;
         var n = xs.size();
+        if (ys.size() < n) { n = ys.size(); }
+        if (zs.size() < n) { n = zs.size(); }
 
         for (var i = 0; i < n; i += 1) {
             var xg = xs[i] / 1000.0;
