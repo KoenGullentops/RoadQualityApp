@@ -123,7 +123,9 @@ code still can't touch the accelerometer at all).
   pause/resume — confirmed via the local SDK docs, which document
   `onTimerPause`/`onTimerResume` as separate callbacks from `onTimerStart`)
   clears the trip sum/count so the average doesn't carry over into the
-  next ride.
+  next ride. White background with black text (rather than the reverse),
+  and a small "LAST UPDATED HH:MM" line showing when the background
+  service last actually ran.
 
 This hasn't been tested on-device yet — the API shapes and background
 constraints are all verified against the local Connect IQ SDK docs, but

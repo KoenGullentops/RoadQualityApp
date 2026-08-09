@@ -4,6 +4,7 @@ using Toybox.Sensor as Sensor;
 using Toybox.Math as Math;
 using Toybox.Application.Storage as Storage;
 using Toybox.Lang as Lang;
+using Toybox.Time as Time;
 
 // Runs in the background every 5 minutes (the minimum interval Connect IQ
 // allows for a temporal event). Samples the accelerometer for one short
@@ -56,6 +57,7 @@ class RoadQualityServiceDelegate extends System.ServiceDelegate {
         }
 
         Storage.setValue("lastRoughness", roughness);
+        Storage.setValue("lastUpdatedAt", Time.now().value());
 
         var tripSum = Storage.getValue("tripSum");
         var tripCount = Storage.getValue("tripCount");
