@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application
+        id="9028e534621e4480aa884b53c3727850"
+        type="datafield"
+        name="@Strings.AppName"
+        entry="RoadQualityFieldApp"
+        launcherIcon="@Drawables.LauncherIcon"
+        minSdkVersion="3.3.0">
+        <iq:products>
+            <iq:product id="edge1030plus"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Sensor"/>
+            <iq:uses-permission id="Background"/>
+            <iq:uses-permission id="FitContributor"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
