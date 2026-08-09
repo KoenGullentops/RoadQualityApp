@@ -8,21 +8,21 @@ using Toybox.Math as Math;
 // (a sliding window of the last 300 once-per-second compute() samples).
 class RoadQualityField extends Ui.DataField {
 
-    hidden var roughnessField;
+    hidden var roughnessField as Fit.Field;
 
     // Accumulates live accelerometer samples between compute() calls.
-    hidden var sumSquaredDeviation;
-    hidden var sampleCount;
+    hidden var sumSquaredDeviation as Float;
+    hidden var sampleCount as Number;
 
     // Ring buffer holding the last windowSize per-second instantaneous
     // values, plus a running sum so the average is O(1) to update.
-    hidden var windowSize;
-    hidden var buffer;
-    hidden var writeIndex;
-    hidden var filledCount;
-    hidden var ringSum;
+    hidden var windowSize as Number;
+    hidden var buffer as Array<Float>;
+    hidden var writeIndex as Number;
+    hidden var filledCount as Number;
+    hidden var ringSum as Float;
 
-    hidden var currentValue;
+    hidden var currentValue as Float;
 
     function initialize() {
         DataField.initialize();
@@ -32,7 +32,7 @@ class RoadQualityField extends Ui.DataField {
         currentValue = 0.0;
 
         windowSize = 300;
-        buffer = new [windowSize];
+        buffer = new [windowSize] as Array<Float>;
         for (var i = 0; i < windowSize; i += 1) {
             buffer[i] = 0.0;
         }
@@ -56,15 +56,15 @@ class RoadQualityField extends Ui.DataField {
     // milli-g, possibly containing several samples gathered since the last
     // callback. We fold them into a running sum-of-squared-deviation so
     // compute() can produce an RMS without holding onto every raw sample.
-    function onSensorData(sensorData) {
+    function onSensorData(sensorData as Sensor.SensorData) as Void {
         var accel = sensorData.accelerometerData;
         if (accel == null || accel.x == null) {
             return;
         }
 
-        var xs = accel.x;
-        var ys = accel.y;
-        var zs = accel.z;
+        var xs = accel.x as Array<Number>;
+        var ys = accel.y as Array<Number>;
+        var zs = accel.z as Array<Number>;
         var n = xs.size();
 
         for (var i = 0; i < n; i += 1) {

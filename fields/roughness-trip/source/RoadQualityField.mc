@@ -7,18 +7,18 @@ using Toybox.Math as Math;
 // Cumulative average of road roughness since the activity started.
 class RoadQualityField extends Ui.DataField {
 
-    hidden var roughnessField;
+    hidden var roughnessField as Fit.Field;
 
     // Accumulates live accelerometer samples between compute() calls.
-    hidden var sumSquaredDeviation;
-    hidden var sampleCount;
+    hidden var sumSquaredDeviation as Float;
+    hidden var sampleCount as Number;
 
     // Running sum/count of every per-second instantaneous value since the
     // field was initialized (i.e. since the activity started).
-    hidden var tripSum;
-    hidden var tripCount;
+    hidden var tripSum as Float;
+    hidden var tripCount as Number;
 
-    hidden var currentValue;
+    hidden var currentValue as Float;
 
     function initialize() {
         DataField.initialize();
@@ -45,15 +45,15 @@ class RoadQualityField extends Ui.DataField {
     // milli-g, possibly containing several samples gathered since the last
     // callback. We fold them into a running sum-of-squared-deviation so
     // compute() can produce an RMS without holding onto every raw sample.
-    function onSensorData(sensorData) {
+    function onSensorData(sensorData as Sensor.SensorData) as Void {
         var accel = sensorData.accelerometerData;
         if (accel == null || accel.x == null) {
             return;
         }
 
-        var xs = accel.x;
-        var ys = accel.y;
-        var zs = accel.z;
+        var xs = accel.x as Array<Number>;
+        var ys = accel.y as Array<Number>;
+        var zs = accel.z as Array<Number>;
         var n = xs.size();
 
         for (var i = 0; i < n; i += 1) {
