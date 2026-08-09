@@ -6,22 +6,25 @@
 <title>DS2.0 Road Roughness Map</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
 <style>
+  /* DS2.0 palette: --color-1 #6fa08b, --color-2 #ecd668, --color-3 #73a78f,
+     --color-4 #002115, --color-5 #f5f0e3. Muted/border tones below are
+     blends of those five, not new hues. */
   :root {
-    --bg: #f4f5f7;
+    --bg: #f5f0e3;
     --panel-bg: #ffffff;
-    --text: #1c1f26;
-    --muted: #6b7280;
-    --border: #e2e5ea;
-    --accent: #2563eb;
+    --text: #002115;
+    --muted: #6e7e72;
+    --border: #dcdbce;
+    --accent: #6fa08b;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #14161c;
-      --panel-bg: #1c1f27;
-      --text: #ecedf0;
-      --muted: #9aa0ab;
-      --border: #2c303a;
-      --accent: #5b9bff;
+      --bg: #002115;
+      --panel-bg: #0d3023;
+      --text: #f5f0e3;
+      --muted: #939d91;
+      --border: #183d2f;
+      --accent: #73a78f;
     }
   }
   * { box-sizing: border-box; }
@@ -184,6 +187,7 @@
   }
   #error.hidden { display: none; }
   .leaflet-popup-content { font-size: 0.8rem; }
+  .leaflet-control-attribution a { color: var(--accent); }
 </style>
 </head>
 <body>
