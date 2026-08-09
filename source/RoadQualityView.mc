@@ -18,11 +18,18 @@ class RoadQualityView extends Ui.View {
         var w = dc.getWidth();
         var h = dc.getHeight();
 
+        dc.drawText(w / 2, h * 0.08, Gfx.FONT_XTINY, "Road Quality", Gfx.TEXT_JUSTIFY_CENTER);
+
+        var error = recorder.getLastError();
+        if (error != null) {
+            dc.drawText(w / 2, h * 0.20, Gfx.FONT_XTINY, "Error - tap to retry", Gfx.TEXT_JUSTIFY_CENTER);
+            dc.drawText(w / 2, h * 0.40, Gfx.FONT_XTINY, error, Gfx.TEXT_JUSTIFY_CENTER);
+            return;
+        }
+
         var status = recorder.isRecording()
             ? "RECORDING - tap to stop & save"
             : "Tap to start recording";
-
-        dc.drawText(w / 2, h * 0.08, Gfx.FONT_XTINY, "Road Quality", Gfx.TEXT_JUSTIFY_CENTER);
         dc.drawText(w / 2, h * 0.20, Gfx.FONT_XTINY, status, Gfx.TEXT_JUSTIFY_CENTER);
 
         dc.drawText(w / 2, h * 0.42, Gfx.FONT_TINY,

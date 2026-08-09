@@ -53,10 +53,15 @@ class RoadQualityRecorder {
     hidden var value5min as Lang.Float;
     hidden var valueTrip as Lang.Float;
 
+    // Set when start() fails, so the view can show what went wrong
+    // instead of the app just crashing to the system error screen.
+    hidden var lastError as Lang.String?;
+
     function initialize() {
         state = STATE_STOPPED;
         session = null;
         timer = new Timer.Timer();
+        lastError = null;
 
         buffer1 = new [60] as Lang.Array<Lang.Float>;
         buffer5 = new [300] as Lang.Array<Lang.Float>;
@@ -124,35 +129,70 @@ class RoadQualityRecorder {
         value1min = 0.0;
         value5min = 0.0;
         valueTrip = 0.0;
+        lastError = null;
 
-        session = Recording.createSession({
-            :name => "Road Quality",
-            :sport => Activity.SPORT_CYCLING,
-            :subSport => Activity.SUB_SPORT_GENERIC
-        });
+        try {
+            session = Recording.createSession({
+                :name => "Road Quality",
+                :sport => Activity.SPORT_CYCLING,
+                :subSport => Activity.SUB_SPORT_GENERIC
+            });
 
-        field1min = session.createField(
-            "roughness_1min_g", 0, Fit.DATA_TYPE_FLOAT,
-            { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
-        );
-        field5min = session.createField(
-            "roughness_5min_g", 1, Fit.DATA_TYPE_FLOAT,
-            { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
-        );
-        fieldTrip = session.createField(
-            "roughness_trip_g", 2, Fit.DATA_TYPE_FLOAT,
-            { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
-        );
+            field1min = session.createField(
+                "roughness_1min_g", 0, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
+            field5min = session.createField(
+                "roughness_5min_g", 1, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
+            fieldTrip = session.createField(
+                "roughness_trip_g", 2, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
 
-        session.start();
+            session.start();
 
-        Sensor.registerSensorDataListener(method(:onSensorData), {
-            :accelerometer => { :enabled => true }
-        });
+            Sensor.registerSensorDataListener(method(:onSensorData), {
+                :accelerometer => { :enabled => true, :sampleRate => 25 }
+            });
 
-        timer.start(method(:onTimerTick), 1000, true);
+            timer.start(method(:onTimerTick), 1000, true);
 
-        state = STATE_RECORDING;
+            state = STATE_RECORDING;
+        } catch (ex instanceof Lang.Exception) {
+            lastError = ex.getErrorMessage();
+            abandonSession();
+            state = STATE_STOPPED;
+        }
+    }
+
+    // Best-effort cleanup of a partially-started session after start()
+    // fails partway through. Each call is independently guarded since we
+    // don't know how far start() got before it threw.
+    hidden function abandonSession() as Void {
+        timer.stop();
+
+        try {
+            Sensor.unregisterSensorDataListener();
+        } catch (ex instanceof Lang.Exception) {
+        }
+
+        if (session != null) {
+            try {
+                session.stop();
+            } catch (ex instanceof Lang.Exception) {
+            }
+            try {
+                session.discard();
+            } catch (ex instanceof Lang.Exception) {
+            }
+            session = null;
+        }
+    }
+
+    function getLastError() as Lang.String? {
+        return lastError;
     }
 
     function stopAndSave() as Void {
