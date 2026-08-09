@@ -52,8 +52,8 @@ server-side dependencies.
   loaded ride, not a fixed absolute scale — so "red" on one ride and
   "red" on another don't necessarily mean the same actual roughness
   value. The legend always shows the actual g values for the loaded ride.
-- Untested in an actual browser in the environment this was built in —
-  the core data logic (field selection, forward-fill, distance
-  calculation, color mapping) was verified against real ride data via a
-  standalone Node.js test, but the page itself (Leaflet rendering, drag
-  and drop, layout) hasn't been opened in a real browser yet.
+- Leaflet is vendored into `vendor/leaflet/` rather than loaded from a
+  CDN, so the page has no external script dependency and works from a
+  plain `file://` open with no network access at all except for the map
+  tile images themselves (those still come from OpenStreetMap's tile
+  servers, since redistributing map imagery isn't practical).
