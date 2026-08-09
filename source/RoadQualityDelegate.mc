@@ -24,13 +24,22 @@ class RoadQualityDelegate extends Ui.BehaviorDelegate {
         return true;
     }
 
-    // Swipe or the physical page button opens the map screen.
+    // Swipe or the physical page button opens the map screen. Wrapped in
+    // try/catch since MapView is known to be less reliable than the rest
+    // of this app's APIs - better to show the actual error on screen than
+    // crash and need another log pull to find out what happened.
     function onNextPage() as Lang.Boolean {
-        Ui.pushView(
-            new RoadQualityMapView(recorder),
-            new RoadQualityMapDelegate(),
-            Ui.SLIDE_LEFT
-        );
+        recorder.clearMapError();
+        try {
+            Ui.pushView(
+                new RoadQualityMapView(recorder),
+                new RoadQualityMapDelegate(),
+                Ui.SLIDE_LEFT
+            );
+        } catch (ex instanceof Lang.Exception) {
+            recorder.setMapError(ex.getErrorMessage());
+            Ui.requestUpdate();
+        }
         return true;
     }
 

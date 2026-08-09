@@ -31,6 +31,10 @@ class RoadQualityView extends Ui.View {
         var status = recorder.isRecording()
             ? "RECORDING - tap to stop & save"
             : "Tap to start recording";
+        var mapError = recorder.getMapError();
+        if (mapError != null) {
+            status = "Map error: " + mapError;
+        }
         dc.drawText(w / 2, h * 0.14, Gfx.FONT_XTINY, status, Gfx.TEXT_JUSTIFY_CENTER);
 
         dc.drawText(w / 2, h * 0.24, Gfx.FONT_TINY,

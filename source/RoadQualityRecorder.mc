@@ -83,11 +83,16 @@ class RoadQualityRecorder {
     // instead of the app just crashing to the system error screen.
     hidden var lastError as Lang.String?;
 
+    // Set when opening the map screen fails; shown on the main screen's
+    // status line without hiding the rest of the dashboard.
+    hidden var mapError as Lang.String?;
+
     function initialize() {
         state = STATE_STOPPED;
         session = null;
         timer = new Timer.Timer();
         lastError = null;
+        mapError = null;
 
         buffer1 = new [60] as Lang.Array<Lang.Float>;
         buffer5 = new [300] as Lang.Array<Lang.Float>;
@@ -247,6 +252,22 @@ class RoadQualityRecorder {
 
     function getLastError() as Lang.String? {
         return lastError;
+    }
+
+    function getMapError() as Lang.String? {
+        return mapError;
+    }
+
+    // Lets the map screen surface its own failures on the main screen's
+    // status line (a separate field from lastError, which takes over the
+    // whole screen for a failed recording start - a failed map open
+    // shouldn't hide the roughness values that are still working fine).
+    function setMapError(message as Lang.String) as Void {
+        mapError = message;
+    }
+
+    function clearMapError() as Void {
+        mapError = null;
     }
 
     function stopAndSave() as Void {
