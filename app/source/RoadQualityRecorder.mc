@@ -211,6 +211,14 @@ class RoadQualityRecorder {
 
             session.start();
 
+            // Creating/starting a session does NOT turn the GPS receiver
+            // on by itself - confirmed against the local SDK docs
+            // ("To enable the GPS call the Position.enableLocationEvents()
+            // method"), and this was the actual reason recorded FIT files
+            // had no position/speed/distance despite genuine outdoor
+            // testing with a real GPS fix available.
+            Position.enableLocationEvents(Position.LOCATION_CONTINUOUS, method(:onPositionEvent));
+
             Sensor.registerSensorDataListener(method(:onSensorData), {
                 :period => 1,
                 :accelerometer => { :enabled => true, :sampleRate => 25 }
@@ -226,11 +234,23 @@ class RoadQualityRecorder {
         }
     }
 
+    // Required listener for Position.enableLocationEvents() - we don't
+    // need to do anything with the update ourselves, since
+    // Activity.getActivityInfo() already reflects the live fix once GPS
+    // is actually turned on, which is what this call is for.
+    function onPositionEvent(posInfo as Position.Info) as Void {
+    }
+
     // Best-effort cleanup of a partially-started session after start()
     // fails partway through. Each call is independently guarded since we
     // don't know how far start() got before it threw.
     hidden function abandonSession() as Void {
         timer.stop();
+
+        try {
+            Position.enableLocationEvents(Position.LOCATION_DISABLE, null);
+        } catch (ex instanceof Lang.Exception) {
+        }
 
         try {
             Sensor.unregisterSensorDataListener();
@@ -272,6 +292,7 @@ class RoadQualityRecorder {
 
     function stopAndSave() as Void {
         timer.stop();
+        Position.enableLocationEvents(Position.LOCATION_DISABLE, null);
         Sensor.unregisterSensorDataListener();
 
         if (session != null) {

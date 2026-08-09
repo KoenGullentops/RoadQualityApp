@@ -169,7 +169,16 @@ whichever one(s) you want, the same way each time:
 
 `app/manifest.xml` requests `Sensor` (accelerometer), `Fit` (creating an
 `ActivityRecording` session), `FitContributor` (writing developer fields),
-and `Positioning` (GPS-derived speed/distance/map track).
+and `Positioning` (GPS-derived speed/distance/map track). Note that having
+the `Positioning` permission declared is not enough by itself — the GPS
+receiver only actually turns on because `RoadQualityRecorder.start()`
+explicitly calls `Position.enableLocationEvents(Position.LOCATION_CONTINUOUS, ...)`.
+Creating and starting the `ActivityRecording.Session` does not enable it
+implicitly; early builds of this app omitted that call, so recordings had
+no position/speed/distance at all even during genuine outdoor testing
+with a GPS fix available — confirmed against the local SDK docs
+("Controlling the FIT file recording requires a few steps: enable the
+sensors to be recorded...").
 `datafield/manifest.xml` requests `Sensor`, `Background`, and
 `FitContributor`. Both target `minSdkVersion 3.3.0`. The `type` values
 (`watch-app` for `app/`, `datafield` for `datafield/`) and permission
@@ -252,3 +261,11 @@ is empty, the ride wasn't recorded with either app.
   verified against the local SDK docs (background trigger types, Sensor's
   documented runtime contexts, `Background.exit`/`Storage` semantics) but
   real-device timing behavior is unconfirmed.
+- Every `app/` ride recorded before the GPS fix above had no
+  position/speed/distance at all, confirmed on real outdoor rides with a
+  GPS fix available (not just no fix yet, as originally assumed) - the
+  session was simply never turning the GPS receiver on. This also means
+  the 2x2 stats grid's speed/distance and the map screen's breadcrumb
+  trail were never actually populated in any test so far, not just
+  "untested" as previously stated here. Retest all of `app/` on a real
+  ride now that GPS is properly enabled.
