@@ -3,6 +3,7 @@ using Toybox.Graphics as Gfx;
 using Toybox.Sensor as Sensor;
 using Toybox.FitContributor as Fit;
 using Toybox.Math as Math;
+using Toybox.Lang as Lang;
 
 // Cumulative average of road roughness since the activity started.
 class RoadQualityField extends Ui.DataField {
@@ -10,15 +11,15 @@ class RoadQualityField extends Ui.DataField {
     hidden var roughnessField as Fit.Field;
 
     // Accumulates live accelerometer samples between compute() calls.
-    hidden var sumSquaredDeviation as Float;
-    hidden var sampleCount as Number;
+    hidden var sumSquaredDeviation as Lang.Float;
+    hidden var sampleCount as Lang.Number;
 
     // Running sum/count of every per-second instantaneous value since the
     // field was initialized (i.e. since the activity started).
-    hidden var tripSum as Float;
-    hidden var tripCount as Number;
+    hidden var tripSum as Lang.Float;
+    hidden var tripCount as Lang.Number;
 
-    hidden var currentValue as Float;
+    hidden var currentValue as Lang.Float;
 
     function initialize() {
         DataField.initialize();
@@ -51,9 +52,9 @@ class RoadQualityField extends Ui.DataField {
             return;
         }
 
-        var xs = accel.x as Array<Number>;
-        var ys = accel.y as Array<Number>;
-        var zs = accel.z as Array<Number>;
+        var xs = accel.x as Lang.Array<Lang.Number>;
+        var ys = accel.y as Lang.Array<Lang.Number>;
+        var zs = accel.z as Lang.Array<Lang.Number>;
         var n = xs.size();
 
         for (var i = 0; i < n; i += 1) {

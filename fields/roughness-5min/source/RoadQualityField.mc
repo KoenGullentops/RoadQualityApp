@@ -3,6 +3,7 @@ using Toybox.Graphics as Gfx;
 using Toybox.Sensor as Sensor;
 using Toybox.FitContributor as Fit;
 using Toybox.Math as Math;
+using Toybox.Lang as Lang;
 
 // Rolling average of road roughness over the trailing 5 minutes (300 seconds)
 // (a sliding window of the last 300 once-per-second compute() samples).
@@ -11,18 +12,18 @@ class RoadQualityField extends Ui.DataField {
     hidden var roughnessField as Fit.Field;
 
     // Accumulates live accelerometer samples between compute() calls.
-    hidden var sumSquaredDeviation as Float;
-    hidden var sampleCount as Number;
+    hidden var sumSquaredDeviation as Lang.Float;
+    hidden var sampleCount as Lang.Number;
 
     // Ring buffer holding the last windowSize per-second instantaneous
     // values, plus a running sum so the average is O(1) to update.
-    hidden var windowSize as Number;
-    hidden var buffer as Array<Float>;
-    hidden var writeIndex as Number;
-    hidden var filledCount as Number;
-    hidden var ringSum as Float;
+    hidden var windowSize as Lang.Number;
+    hidden var buffer as Lang.Array<Lang.Float>;
+    hidden var writeIndex as Lang.Number;
+    hidden var filledCount as Lang.Number;
+    hidden var ringSum as Lang.Float;
 
-    hidden var currentValue as Float;
+    hidden var currentValue as Lang.Float;
 
     function initialize() {
         DataField.initialize();
@@ -32,7 +33,7 @@ class RoadQualityField extends Ui.DataField {
         currentValue = 0.0;
 
         windowSize = 300;
-        buffer = new [windowSize] as Array<Float>;
+        buffer = new [windowSize] as Lang.Array<Lang.Float>;
         for (var i = 0; i < windowSize; i += 1) {
             buffer[i] = 0.0;
         }
@@ -62,9 +63,9 @@ class RoadQualityField extends Ui.DataField {
             return;
         }
 
-        var xs = accel.x as Array<Number>;
-        var ys = accel.y as Array<Number>;
-        var zs = accel.z as Array<Number>;
+        var xs = accel.x as Lang.Array<Lang.Number>;
+        var ys = accel.y as Lang.Array<Lang.Number>;
+        var zs = accel.z as Lang.Array<Lang.Number>;
         var n = xs.size();
 
         for (var i = 0; i < n; i += 1) {
