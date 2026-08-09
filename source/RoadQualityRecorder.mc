@@ -154,6 +154,7 @@ class RoadQualityRecorder {
             session.start();
 
             Sensor.registerSensorDataListener(method(:onSensorData), {
+                :period => 1,
                 :accelerometer => { :enabled => true, :sampleRate => 25 }
             });
 
