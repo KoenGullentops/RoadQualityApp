@@ -40,43 +40,66 @@ class RoadQualityView extends Ui.View {
             Gfx.TEXT_JUSTIFY_CENTER);
 
         var graphX = (w * 0.06).toNumber();
-        var graphY = (h * 0.32).toNumber();
+        var graphY = (h * 0.27).toNumber();
         var graphW = (w * 0.88).toNumber();
-        var graphH = (h * 0.42).toNumber();
+        var graphH = (h * 0.31).toNumber();
         drawGraph(dc, graphX, graphY, graphW, graphH);
 
         drawStats(dc, w, h);
     }
 
-    // Ride basics below the graph, in a smaller font, pulled from the
+    // Ride basics as a 2x2 grid filling the remaining space below the
+    // graph, values as large as that space allows. Pulled from the
     // activity info the recording session already exposes - no separate
     // GPS/HR reading needed on our part.
     hidden function drawStats(dc as Gfx.Dc, w as Lang.Number, h as Lang.Number) as Void {
         var info = Activity.getActivityInfo();
 
-        var speedText = "-- km/h";
-        var distanceText = "-- km";
+        var speedText = "--";
+        var distanceText = "--";
         var timeText = "--:--";
-        var hrText = "-- bpm";
+        var hrText = "--";
 
         if (info != null) {
             if (info.currentSpeed != null) {
-                speedText = (info.currentSpeed * 3.6).format("%.1f") + " km/h";
+                speedText = (info.currentSpeed * 3.6).format("%.1f");
             }
             if (info.elapsedDistance != null) {
-                distanceText = (info.elapsedDistance / 1000.0).format("%.2f") + " km";
+                distanceText = (info.elapsedDistance / 1000.0).format("%.2f");
             }
             if (info.elapsedTime != null) {
                 timeText = formatElapsedTime(info.elapsedTime);
             }
             if (info.currentHeartRate != null) {
-                hrText = info.currentHeartRate.format("%d") + " bpm";
+                hrText = info.currentHeartRate.format("%d");
             }
         }
 
+        var statsTop = h * 0.60;
+        var statsBottom = h * 0.98;
+        var rowH = (statsBottom - statsTop) / 2;
+
+        var col1X = (w * 0.27).toNumber();
+        var col2X = (w * 0.73).toNumber();
+
+        var row1LabelY = (statsTop + rowH * 0.05).toNumber();
+        var row1ValueY = (statsTop + rowH * 0.32).toNumber();
+        var row2LabelY = (statsTop + rowH * 1.05).toNumber();
+        var row2ValueY = (statsTop + rowH * 1.32).toNumber();
+
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.78, Gfx.FONT_XTINY, speedText + "   " + distanceText, Gfx.TEXT_JUSTIFY_CENTER);
-        dc.drawText(w / 2, h * 0.88, Gfx.FONT_XTINY, timeText + "   " + hrText, Gfx.TEXT_JUSTIFY_CENTER);
+
+        dc.drawText(col1X, row1LabelY, Gfx.FONT_XTINY, "SPEED km/h", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(col1X, row1ValueY, Gfx.FONT_NUMBER_MEDIUM, speedText, Gfx.TEXT_JUSTIFY_CENTER);
+
+        dc.drawText(col2X, row1LabelY, Gfx.FONT_XTINY, "DISTANCE km", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(col2X, row1ValueY, Gfx.FONT_NUMBER_MEDIUM, distanceText, Gfx.TEXT_JUSTIFY_CENTER);
+
+        dc.drawText(col1X, row2LabelY, Gfx.FONT_XTINY, "TIME", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(col1X, row2ValueY, Gfx.FONT_NUMBER_MEDIUM, timeText, Gfx.TEXT_JUSTIFY_CENTER);
+
+        dc.drawText(col2X, row2LabelY, Gfx.FONT_XTINY, "HR bpm", Gfx.TEXT_JUSTIFY_CENTER);
+        dc.drawText(col2X, row2ValueY, Gfx.FONT_NUMBER_MEDIUM, hrText, Gfx.TEXT_JUSTIFY_CENTER);
     }
 
     hidden function formatElapsedTime(elapsedMs as Lang.Number) as Lang.String {
