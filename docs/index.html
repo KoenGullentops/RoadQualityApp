@@ -205,11 +205,13 @@
       <div class="box" id="dropbox">
         <p style="color: var(--text); font-weight: 600; margin-top: 0;">Load a ride to get started</p>
         <p>
-          Drop a <code>ride.json</code> file here, or click to choose one.<br><br>
-          Produce it from a <code>.FIT</code> file recorded with either DS2.0 Road Quality Index app using:
+          Drop a <code>.FIT</code> file recorded with either DS2.0 Road
+          Quality Index app here, or click to choose one &mdash; it's
+          decoded entirely in your browser, nothing is uploaded anywhere.<br><br>
+          A pre-converted <code>ride.json</code> (from
+          <code>tools/fit_to_json.py</code>) works too, if you already have one.
         </p>
-        <p><code>python3 tools/fit_to_json.py ride.fit ride.json</code></p>
-        <input type="file" id="fileInput" accept="application/json,.json" style="margin-top: 0.5rem;">
+        <input type="file" id="fileInput" accept=".fit,application/json,.json" style="margin-top: 0.5rem;">
       </div>
     </div>
 
@@ -228,6 +230,7 @@
 </div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/fitsdk/fitsdk.bundle.js"></script>
 <script>
 (function () {
   "use strict";
@@ -468,8 +471,85 @@
     }
   }
 
-  function handleFile(file) {
-    if (!file) { return; }
+  var SEMICIRCLE_TO_DEG = 180 / Math.pow(2, 31);
+
+  // Mirrors tools/fit_to_json.py's output shape, so the exact same
+  // rendering code (loadData/renderField/renderStats) handles both a
+  // directly-uploaded .FIT file and a pre-converted ride.json.
+  function convertFitMessagesToRide(messages, sourceFileName) {
+    var devFieldNames = {};
+    (messages.fieldDescriptionMesgs || []).forEach(function (fd) {
+      devFieldNames[fd.key] = fd.fieldName;
+    });
+
+    var records = (messages.recordMesgs || [])
+      .filter(function (r) { return r.timestamp instanceof Date; })
+      .map(function (r) {
+        var lat = r.positionLat != null ? r.positionLat * SEMICIRCLE_TO_DEG : null;
+        var lon = r.positionLong != null ? r.positionLong * SEMICIRCLE_TO_DEG : null;
+        var speed = r.enhancedSpeed != null ? r.enhancedSpeed : (r.speed != null ? r.speed : null);
+
+        var out = {
+          timestamp: r.timestamp.toISOString(),
+          epoch: r.timestamp.getTime() / 1000,
+          lat: lat,
+          lon: lon,
+          speed_mps: speed
+        };
+        FIELD_PRIORITY.forEach(function (name) { out[name] = null; });
+        if (r.developerFields) {
+          Object.keys(r.developerFields).forEach(function (key) {
+            var name = devFieldNames[key];
+            if (name && out.hasOwnProperty(name)) {
+              out[name] = r.developerFields[key];
+            }
+          });
+        }
+        return out;
+      });
+
+    records.sort(function (a, b) { return a.epoch - b.epoch; });
+
+    var present = FIELD_PRIORITY.filter(function (name) {
+      return records.some(function (r) { return r[name] !== null; });
+    });
+
+    return {
+      source_fit_file: sourceFileName,
+      generated_at: new Date().toISOString(),
+      record_count: records.length,
+      roughness_fields_present: present,
+      road_quality: records
+    };
+  }
+
+  function handleFitFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var stream = FitSDK.Stream.fromArrayBuffer(reader.result);
+        var decoder = new FitSDK.Decoder(stream);
+        if (!decoder.isFIT() || !decoder.checkIntegrity()) {
+          showError("That doesn't look like a valid .FIT file.");
+          return;
+        }
+        var result = decoder.read();
+        if (result.errors && result.errors.length) {
+          showError("Errors while decoding the FIT file: " + result.errors.join("; "));
+        }
+        var data = convertFitMessagesToRide(result.messages, file.name);
+        loadData(data);
+      } catch (e) {
+        showError("Couldn't decode that FIT file: " + e.message);
+      }
+    };
+    reader.onerror = function () {
+      showError("Couldn't read that file.");
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function handleJsonFile(file) {
     var reader = new FileReader();
     reader.onload = function () {
       try {
@@ -483,6 +563,15 @@
       showError("Couldn't read that file.");
     };
     reader.readAsText(file);
+  }
+
+  function handleFile(file) {
+    if (!file) { return; }
+    if (/\.fit$/i.test(file.name)) {
+      handleFitFile(file);
+    } else {
+      handleJsonFile(file);
+    }
   }
 
   var fileInput = document.getElementById("fileInput");

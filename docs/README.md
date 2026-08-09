@@ -7,21 +7,24 @@ colored by road-surface roughness — green (smooth) through yellow to red
 
 ## Using it
 
-1. Convert a `.FIT` file recorded with either DS2.0 Road Quality Index app
-   into JSON, same as always:
-   ```
-   pip install -r ../tools/requirements.txt
-   python3 ../tools/fit_to_json.py ride.fit ride.json
-   ```
-2. Open this page (locally via `index.html`, or the published GitHub
-   Pages URL — see below) and drop `ride.json` onto it, or click to
-   choose the file.
-3. The route draws automatically, colored by whichever roughness metric
+1. Open this page (locally via `index.html`, or the published GitHub
+   Pages URL — see below) and drop the `.FIT` file straight from your
+   device onto it, or click to choose the file. It's decoded entirely in
+   your browser using Garmin's official FIT JavaScript SDK
+   (vendored into `vendor/fitsdk/`) — no conversion step needed.
+2. The route draws automatically, colored by whichever roughness metric
    the file has (if more than one is present — e.g. `app/`'s 1 min / 5
    min / trip averages — pick from the dropdown in the header).
 
-Nothing is uploaded anywhere; the file is read entirely in your browser
-via the File API.
+Nothing is uploaded anywhere; the file is read and decoded entirely in
+your browser via the File API.
+
+A pre-converted `ride.json` (from `tools/fit_to_json.py`) still works too,
+if you already have one lying around:
+```
+pip install -r ../tools/requirements.txt
+python3 ../tools/fit_to_json.py ride.fit ride.json
+```
 
 ## Hosting on GitHub Pages
 
@@ -52,8 +55,9 @@ server-side dependencies.
   loaded ride, not a fixed absolute scale — so "red" on one ride and
   "red" on another don't necessarily mean the same actual roughness
   value. The legend always shows the actual g values for the loaded ride.
-- Leaflet is vendored into `vendor/leaflet/` rather than loaded from a
-  CDN, so the page has no external script dependency and works from a
-  plain `file://` open with no network access at all except for the map
-  tile images themselves (those still come from OpenStreetMap's tile
-  servers, since redistributing map imagery isn't practical).
+- Leaflet and the FIT decoder are both vendored (`vendor/leaflet/`,
+  `vendor/fitsdk/`) rather than loaded from a CDN, so the page has no
+  external script dependency and works from a plain `file://` open with
+  no network access at all except for the map tile images themselves
+  (those still come from OpenStreetMap's tile servers, since
+  redistributing map imagery isn't practical).

@@ -7,7 +7,7 @@ Edge 1030 Plus's accelerometer, for two different use cases:
 |---|---|---|---|
 | `app/` | Standalone watch app, owns its own recording session | Continuous (1 Hz) | Dedicated "road quality" rides where you don't need your normal ride screens |
 | `datafield/` | A tile you add to your normal Ride activity screen | ~Every 5 minutes | Everyday rides where you still want power/HR/maps/etc., plus a lightweight roughness reading |
-| `docs/` | Static web app (GitHub Pages) | — | View a ride's route on a map, colored by roughness, from the JSON either app produces |
+| `docs/` | Static web app (GitHub Pages) | — | View a ride's route on a map, colored by roughness — drop a `.FIT` file straight in, or the JSON either app produces |
 
 ## Why two apps, and why the data field only updates every 5 minutes
 
@@ -204,20 +204,23 @@ out to be wrong.
 3. Ride normally. The tile shows `--` until the first background sample
    arrives (up to 5 minutes in), then updates roughly every 5 minutes.
 
-## Getting the FIT file and converting it
+## Getting the FIT file and viewing it
 
 Works the same regardless of which app recorded the ride:
 
 1. Connect the Edge 1030 Plus by USB (or use Garmin Express) and copy the
    activity file out of `GARMIN/ACTIVITY/`.
-2. Convert it:
-   ```
-   pip install -r tools/requirements.txt
-   python3 tools/fit_to_json.py path/to/ride.fit ride.json
-   ```
-3. Move `ride.json` to your iPhone (AirDrop, Files, email, etc.), or open
-   it with **`docs/index.html`** — see [`docs/README.md`](docs/README.md)
-   — to see the route on a map, colored by roughness.
+2. Drop the `.FIT` file straight into **`docs/index.html`** (locally or
+   the published GitHub Pages URL) to see the route on a map, colored by
+   roughness — it's decoded entirely in the browser, no conversion step
+   needed. See [`docs/README.md`](docs/README.md).
+
+If you'd rather convert to JSON first (e.g. for scripting or offline
+analysis), that still works too:
+```
+pip install -r tools/requirements.txt
+python3 tools/fit_to_json.py path/to/ride.fit ride.json
+```
 
 ### Output JSON shape
 
