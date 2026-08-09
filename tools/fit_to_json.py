@@ -5,8 +5,9 @@ whichever road-roughness developer fields are present, written by either:
 
 - app/ (standalone app, own recording session): roughness_1min_g,
   roughness_5min_g, roughness_trip_g, continuously updated every second.
-- datafield/ (Data Field tile on a normal Ride activity): roughness_snapshot_g,
-  a background-sampled snapshot updated roughly every 5 minutes.
+- datafield/ (Data Field tile on a normal Ride activity): roughness_snapshot_g
+  (a background-sampled snapshot updated roughly every 5 minutes) and
+  roughness_trip_avg_g (the running average of all snapshots so far this trip).
 
 A given ride's FIT file will normally have one set or the other, not both,
 depending on which was used to record it.
@@ -33,6 +34,7 @@ ROUGHNESS_FIELDS = {
     "roughness_5min_g": "roughness_5min_g",
     "roughness_trip_g": "roughness_trip_g",
     "roughness_snapshot_g": "roughness_snapshot_g",
+    "roughness_trip_avg_g": "roughness_trip_avg_g",
 }
 
 

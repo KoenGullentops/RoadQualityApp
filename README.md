@@ -110,13 +110,20 @@ code still can't touch the accelerometer at all).
 - **`source/RoadQualityServiceDelegate.mc`** — the background service.
   Wakes every 5 minutes, registers a *short* accelerometer listener
   (`:period => 4`, the max Connect IQ allows per batch), computes one RMS
-  roughness reading the same way `app/` does, stores it via
-  `Application.Storage`, and exits — well inside the 30-second budget
-  Connect IQ gives a background process.
+  roughness reading the same way `app/` does, and exits — well inside the
+  30-second budget Connect IQ gives a background process. Stores that
+  reading as the latest snapshot, and folds it into a running trip
+  sum/count for a trip-wide average, both via `Application.Storage`.
 - **`source/RoadQualityField.mc`** — the actual data field. Reads the
-  last stored value each second and displays it plus writes it into the
-  FIT file as a developer field (`roughness_snapshot_g`) via
+  last stored snapshot and the running trip average each second, displays
+  both, and writes both into the FIT file as developer fields
+  (`roughness_snapshot_g`, `roughness_trip_avg_g`) via
   `Toybox.FitContributor`. Never calls any `Sensor` API itself.
+  `onTimerReset()` (fired only when a ride genuinely ends, not on
+  pause/resume — confirmed via the local SDK docs, which document
+  `onTimerPause`/`onTimerResume` as separate callbacks from `onTimerStart`)
+  clears the trip sum/count so the average doesn't carry over into the
+  next ride.
 
 This hasn't been tested on-device yet — the API shapes and background
 constraints are all verified against the local Connect IQ SDK docs, but
@@ -209,10 +216,12 @@ Works the same regardless of which app recorded the ride:
 ```
 
 A ride recorded with `datafield/` instead will have `roughness_snapshot_g`
-present (and only on the roughly-every-5-minutes records where a fresh
-background sample landed; `null` elsewhere) rather than the other three
-fields. If `roughness_fields_present` is empty, the ride wasn't recorded
-with either app.
+(only on the roughly-every-5-minutes records where a fresh background
+sample landed; `null` elsewhere) and `roughness_trip_avg_g` (present on
+every record once the first snapshot has landed, since it's just written
+alongside the snapshot each second — same value repeated between
+snapshots) rather than the other three fields. If `roughness_fields_present`
+is empty, the ride wasn't recorded with either app.
 
 ## Known caveats
 

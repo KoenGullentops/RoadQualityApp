@@ -8,8 +8,11 @@ using Toybox.Lang as Lang;
 // Runs in the background every 5 minutes (the minimum interval Connect IQ
 // allows for a temporal event). Samples the accelerometer for one short
 // burst, computes an instantaneous roughness reading the same way the
-// standalone app does, stores it, and exits - well within the 30-second
-// background execution budget.
+// standalone app does, stores it as the latest snapshot, folds it into a
+// running trip sum/count for a trip-wide average, and exits - well within
+// the 30-second background execution budget. RoadQualityField.onTimerReset()
+// clears tripSum/tripCount when a ride ends, so the average is scoped to
+// one trip rather than accumulating forever across rides.
 (:background)
 class RoadQualityServiceDelegate extends System.ServiceDelegate {
 
@@ -53,6 +56,13 @@ class RoadQualityServiceDelegate extends System.ServiceDelegate {
         }
 
         Storage.setValue("lastRoughness", roughness);
+
+        var tripSum = Storage.getValue("tripSum");
+        var tripCount = Storage.getValue("tripCount");
+        var newSum = (tripSum == null ? 0.0 : tripSum as Lang.Float) + roughness;
+        var newCount = (tripCount == null ? 0 : tripCount as Lang.Number) + 1;
+        Storage.setValue("tripSum", newSum);
+        Storage.setValue("tripCount", newCount);
 
         Background.exit(null);
     }
