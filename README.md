@@ -1,9 +1,10 @@
-# Road Quality App (Garmin Edge 1030 Plus)
+# DS2.0 Road Quality Index (Garmin Edge 1030 Plus)
 
 A standalone Connect IQ **watch app** that reads the live accelerometer
 during a ride and shows three rolling road-surface roughness averages —
-last 1 minute, last 5 minutes, and since the ride started — so they can be
-mapped against your GPS track afterwards.
+last 1 minute, last 5 minutes, and since the ride started — plus a live
+graph of the raw reading across the whole trip, so it can be mapped
+against your GPS track afterwards.
 
 ## Why a standalone app, not a data field
 
@@ -25,10 +26,14 @@ doesn't exist on Edge devices at all.
 
 The only Connect IQ app type that can read live accelerometer data is one
 that owns its own `Toybox.ActivityRecording` session — i.e. a standalone
-app, not a data field. The trade-off: you start "Road Quality" as its own
-recording instead of adding it to your existing Ride activity profile, so
-you won't see your other usual fields (power, HR zones, maps, etc.) while
-it's recording.
+app, not a data field. The trade-off: you start "DS2.0 Road Quality Index"
+as its own recording instead of adding it to your existing Ride activity
+profile, so you won't see your other usual fields (power, HR zones, maps,
+etc.) while it's recording. This isn't a limitation of our code, either —
+Garmin's background execution API (`Toybox.Background`) enforces a hard
+minimum 5-minute wake interval on Edge devices, nowhere near what
+continuous per-second sampling needs, so there's no way to run this
+alongside your normal Ride profile even via a background service.
 
 ## How it works
 
@@ -44,9 +49,15 @@ it's recording.
 
   All three are written into the session's FIT file every second as
   developer fields (`roughness_1min_g`, `roughness_5min_g`,
-  `roughness_trip_g`) via `Toybox.FitContributor`.
+  `roughness_trip_g`) via `Toybox.FitContributor`. The same per-second
+  instantaneous reading also feeds a whole-trip history graph: a
+  120-point buffer that automatically halves its own resolution (doubling
+  seconds-per-point) whenever it fills up, so a ride of any length fits
+  in a fixed amount of memory — recent history at higher resolution,
+  older history coarser, same idea as how a browser's zoomed-out
+  performance graph works.
 - **`source/RoadQualityView.mc`** — a single screen showing recording
-  status and the three current values.
+  status, the three current values, and the live history graph.
 - **`source/RoadQualityDelegate.mc`** — tap the screen (or press the
   physical select button) to start recording; tap again to stop and save.
 - **`tools/fit_to_json.py`** — a Python script you run afterwards on a
@@ -73,7 +84,7 @@ it's recording.
    `roughness-1min` / `roughness-5min` / `roughness-trip` data fields from
    the earlier design — they can't work and should be deleted from
    `GARMIN/APPS/` (and removed from any field slots they were added to).
-8. On the device, find **Road Quality** in your installed apps (not in the
+8. On the device, find **DS2.0 Road Quality Index** in your installed apps (not in the
    data field picker — it's a regular app) and launch it.
 
 The manifest requests `Sensor` (accelerometer), `Fit` (creating an
@@ -85,7 +96,7 @@ guess (`type="dataField"`, camelCase) turned out to be wrong.
 
 ## Recording a ride
 
-1. Launch **Road Quality** on the device.
+1. Launch **DS2.0 Road Quality Index** on the device.
 2. Tap the screen to start recording. The screen shows "RECORDING" and the
    three live roughness values.
 3. Ride.
@@ -132,9 +143,9 @@ app (e.g. it's a normal Ride activity FIT file).
   hardware/firmware; there's no Connect IQ API to request a specific rate.
 - Recording with this app replaces your normal Ride activity profile for
   that ride — you won't see your usual power/HR/map screens while it's
-  recording, only the Road Quality screen.
-- This project's Monkey C code has been built and run on real Edge 1030
-  Plus hardware (that's how the Data-Field-vs-accelerometer restriction
-  was discovered), but the *current* standalone-app rewrite hasn't been
-  tested on-device yet — build it and try a short ride before trusting it
-  for a real one.
+  recording, only the DS2.0 Road Quality Index screen.
+- This app's core recording (session, accelerometer sampling, the three
+  rolling averages) has been built and run successfully on real Edge 1030
+  Plus hardware. The history graph is new and hasn't been tested on-device
+  yet — build it and check the graph draws sensibly before trusting it for
+  a real ride.

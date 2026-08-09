@@ -53,6 +53,18 @@ class RoadQualityRecorder {
     hidden var value5min as Lang.Float;
     hidden var valueTrip as Lang.Float;
 
+    // Whole-trip history graph: a fixed-size buffer that automatically
+    // halves its resolution (doubling the seconds-per-point) whenever it
+    // fills up, so it can represent a ride of any length in bounded
+    // memory - recent history at higher resolution, older history coarser.
+    hidden const HISTORY_MAX as Lang.Number = 120;
+    hidden var history as Lang.Array<Lang.Float>;
+    hidden var historyCount as Lang.Number;
+    hidden var historyMaxValue as Lang.Float;
+    hidden var historyBucketTarget as Lang.Number;
+    hidden var historyBucketSum as Lang.Float;
+    hidden var historyBucketCount as Lang.Number;
+
     // Set when start() fails, so the view can show what went wrong
     // instead of the app just crashing to the system error screen.
     hidden var lastError as Lang.String?;
@@ -65,6 +77,7 @@ class RoadQualityRecorder {
 
         buffer1 = new [60] as Lang.Array<Lang.Float>;
         buffer5 = new [300] as Lang.Array<Lang.Float>;
+        history = new [HISTORY_MAX] as Lang.Array<Lang.Float>;
 
         sumSquaredDeviation = 0.0;
         sampleCount = 0;
@@ -79,6 +92,12 @@ class RoadQualityRecorder {
 
         tripSum = 0.0;
         tripCount = 0;
+
+        historyCount = 0;
+        historyMaxValue = 0.05;
+        historyBucketTarget = 1;
+        historyBucketSum = 0.0;
+        historyBucketCount = 0;
 
         value1min = 0.0;
         value5min = 0.0;
@@ -110,6 +129,12 @@ class RoadQualityRecorder {
 
         tripSum = 0.0;
         tripCount = 0;
+
+        historyCount = 0;
+        historyMaxValue = 0.05;
+        historyBucketTarget = 1;
+        historyBucketSum = 0.0;
+        historyBucketCount = 0;
     }
 
     function isRecording() as Lang.Boolean {
@@ -271,11 +296,49 @@ class RoadQualityRecorder {
         if (field5min != null) { field5min.setData(value5min); }
         if (fieldTrip != null) { fieldTrip.setData(valueTrip); }
 
+        recordHistory(instant);
+
         Ui.requestUpdate();
+    }
+
+    // Folds one more once-per-second instantaneous reading into the
+    // whole-trip history graph, halving the buffer's resolution whenever
+    // it fills so a ride of any length fits in HISTORY_MAX points.
+    hidden function recordHistory(instant as Lang.Float) as Void {
+        historyBucketSum += instant;
+        historyBucketCount += 1;
+
+        if (historyBucketCount < historyBucketTarget) {
+            return;
+        }
+
+        var bucketAvg = historyBucketSum / historyBucketCount;
+        historyBucketSum = 0.0;
+        historyBucketCount = 0;
+
+        if (historyCount >= HISTORY_MAX) {
+            var newCount = HISTORY_MAX / 2;
+            for (var i = 0; i < newCount; i += 1) {
+                history[i] = (history[2 * i] + history[2 * i + 1]) / 2.0;
+            }
+            historyCount = newCount;
+            historyBucketTarget *= 2;
+        }
+
+        history[historyCount] = bucketAvg;
+        historyCount += 1;
+
+        if (bucketAvg > historyMaxValue) {
+            historyMaxValue = bucketAvg;
+        }
     }
 
     function getValue1Min() as Lang.Float { return value1min; }
     function getValue5Min() as Lang.Float { return value5min; }
     function getValueTrip() as Lang.Float { return valueTrip; }
+
+    function getHistory() as Lang.Array<Lang.Float> { return history; }
+    function getHistoryCount() as Lang.Number { return historyCount; }
+    function getHistoryMaxValue() as Lang.Float { return historyMaxValue; }
 
 }
