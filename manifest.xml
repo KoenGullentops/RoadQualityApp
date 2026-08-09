@@ -15,7 +15,6 @@
             <iq:uses-permission id="Fit"/>
             <iq:uses-permission id="FitContributor"/>
             <iq:uses-permission id="Positioning"/>
-            <iq:uses-permission id="PersistedContent"/>
         </iq:permissions>
         <iq:languages>
             <iq:language>eng</iq:language>
