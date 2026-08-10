@@ -21,6 +21,12 @@ class RoadQualityServiceDelegate extends System.ServiceDelegate {
     // riding before the oldest snapshot gets dropped.
     hidden const HISTORY_MAX as Lang.Number = 100;
 
+    // Weighted toward the Z axis (bumps) over X/Y (braking, cornering,
+    // pedaling) - see the matching comment in app/'s RoadQualityRecorder
+    // for the full rationale and the flat-mount assumption it relies on.
+    hidden const Z_WEIGHT as Lang.Float = 1.0;
+    hidden const XY_WEIGHT as Lang.Float = 0.25;
+
     function initialize() {
         ServiceDelegate.initialize();
     }
@@ -52,9 +58,9 @@ class RoadQualityServiceDelegate extends System.ServiceDelegate {
                     var xg = xs[i] / 1000.0;
                     var yg = ys[i] / 1000.0;
                     var zg = zs[i] / 1000.0;
-                    var magnitude = Math.sqrt(xg * xg + yg * yg + zg * zg);
-                    var deviation = magnitude - 1.0;
-                    sumSquaredDeviation += deviation * deviation;
+                    var zDeviation = zg - 1.0;
+                    var weighted = (Z_WEIGHT * zDeviation * zDeviation) + (XY_WEIGHT * ((xg * xg) + (yg * yg)));
+                    sumSquaredDeviation += weighted;
                 }
                 roughness = Math.sqrt(sumSquaredDeviation / n);
             }

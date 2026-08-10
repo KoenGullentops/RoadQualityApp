@@ -2,6 +2,7 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Lang as Lang;
 using Toybox.Activity as Activity;
+using Toybox.Position as Position;
 
 class RoadQualityView extends Ui.View {
 
@@ -23,6 +24,8 @@ class RoadQualityView extends Ui.View {
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
         dc.drawLine((w * 0.15).toNumber(), (h * 0.075).toNumber(), (w * 0.85).toNumber(), (h * 0.075).toNumber());
         dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+
+        drawGpsIndicator(dc, w, h);
 
         var error = recorder.getLastError();
         if (error != null) {
@@ -53,6 +56,37 @@ class RoadQualityView extends Ui.View {
         drawGraph(dc, graphX, graphY, graphW, graphH);
 
         drawStats(dc, w, h);
+    }
+
+    // Small top-right glanceable GPS fix indicator, since a bad or absent
+    // fix silently means no position/speed/distance/map breadcrumb - this
+    // used to fail completely invisibly (see the GPS-enable bug in
+    // README's Known caveats). Colored so a problem is visible without
+    // reading the text: green/yellow good-to-marginal fix, orange poor,
+    // gray a stale last-known fix, red no fix at all.
+    hidden function drawGpsIndicator(dc as Gfx.Dc, w as Lang.Number, h as Lang.Number) as Void {
+        var info = Activity.getActivityInfo();
+        var quality = info != null ? info.currentLocationAccuracy : null;
+
+        var color = Gfx.COLOR_RED;
+        var text = "GPS --";
+        if (quality == Position.QUALITY_GOOD) {
+            color = Gfx.COLOR_GREEN;
+            text = "GPS";
+        } else if (quality == Position.QUALITY_USABLE) {
+            color = Gfx.COLOR_YELLOW;
+            text = "GPS";
+        } else if (quality == Position.QUALITY_POOR) {
+            color = Gfx.COLOR_ORANGE;
+            text = "GPS";
+        } else if (quality == Position.QUALITY_LAST_KNOWN) {
+            color = Gfx.COLOR_DK_GRAY;
+            text = "GPS?";
+        }
+
+        dc.setColor(color, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(w * 0.94, h * 0.04, Gfx.FONT_XTINY, text, Gfx.TEXT_JUSTIFY_RIGHT);
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
     }
 
     // Ride basics as a 2x2 grid filling the remaining space below the

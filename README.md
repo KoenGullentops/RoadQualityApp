@@ -70,10 +70,14 @@ code still can't touch the accelerometer at all).
   in a fixed amount of memory — recent history at higher resolution,
   older history coarser, same idea as how a browser's zoomed-out
   performance graph works.
-- **`source/RoadQualityView.mc`** — the main screen: recording status, the
-  three current values, the live history graph, and a large 2x2 grid
-  (speed, distance, elapsed time, heart rate) filling the space below,
-  read from `Activity.getActivityInfo()`.
+- **`source/RoadQualityView.mc`** — the main screen: recording status, a
+  top-right GPS fix indicator (green/yellow/orange/gray/red for
+  good/usable/poor/last-known/no fix, from
+  `Activity.getActivityInfo().currentLocationAccuracy` — a bad or absent
+  fix used to fail completely invisibly), the three current values, the
+  live history graph, and a large 2x2 grid (speed, distance, elapsed
+  time, heart rate) filling the space below, also read from
+  `Activity.getActivityInfo()`.
 - **`source/RoadQualityDelegate.mc`** — tap the screen (or press the
   physical select button) to start recording; tap again to stop and save.
   Swipe or press the page button to open the map screen.
@@ -254,10 +258,19 @@ is empty, the ride wasn't recorded with either app.
 
 ## Known caveats
 
-- The roughness score is derived from total acceleration magnitude, not a
-  calibrated "vertical" axis — this avoids needing to know the device's
-  exact mount angle on the handlebars, since a static 1g reading has the
-  same magnitude regardless of orientation.
+- The roughness score is a weighted RMS deviation, not a raw physical
+  measurement: the Z axis (deviation from the ~1g gravity reading a
+  flat-mounted device sees at rest - the axis a vertical bump actually
+  perturbs) is weighted 4x over X/Y (`Z_WEIGHT`/`XY_WEIGHT` in both
+  `RoadQualityRecorder` and `RoadQualityServiceDelegate`), since X/Y
+  mostly reflect braking, cornering, and pedaling rather than road
+  surface. This assumes a standard flat, screen-up mount (out-front or
+  stem) - a significantly tilted or non-standard mount would throw off
+  which axis actually reads "vertical." An earlier version used
+  orientation-independent total acceleration magnitude instead (immune
+  to mount angle, but couldn't distinguish a bump from a hard brake);
+  this was changed deliberately, trading that independence for the
+  ability to prioritize actual bumps.
 - The accelerometer's live sample rate/callback cadence is fixed by the
   hardware/firmware; there's no Connect IQ API to request a specific rate.
 - `app/`'s core recording (session, accelerometer sampling, the three

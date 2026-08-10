@@ -311,6 +311,20 @@ class RoadQualityRecorder {
         state = STATE_STOPPED;
     }
 
+    // Weighted toward the Z axis, which is where bumps/potholes actually
+    // show up: mounted flat on a standard out-front/stem mount (screen
+    // up), the device's local Z axis is approximately vertical, so it's
+    // the axis gravity projects onto (a still bike reads ~1g on Z) and
+    // the one a vertical jolt perturbs most directly. X/Y mostly reflect
+    // braking, cornering, and pedaling forces rather than road surface,
+    // so they're weighted down rather than dropped entirely - a rough
+    // patch still jostles the mount sideways somewhat. This trades away
+    // the previous total-magnitude approach's orientation independence
+    // for a mount-orientation assumption that matches how these devices
+    // are actually mounted in practice.
+    hidden const Z_WEIGHT as Lang.Float = 1.0;
+    hidden const XY_WEIGHT as Lang.Float = 0.25;
+
     function onSensorData(sensorData as Sensor.SensorData) as Void {
         var accel = sensorData.accelerometerData;
         if (accel == null || accel.x == null || accel.y == null || accel.z == null) {
@@ -328,9 +342,9 @@ class RoadQualityRecorder {
             var xg = xs[i] / 1000.0;
             var yg = ys[i] / 1000.0;
             var zg = zs[i] / 1000.0;
-            var magnitude = Math.sqrt(xg * xg + yg * yg + zg * zg);
-            var deviation = magnitude - 1.0;
-            sumSquaredDeviation += deviation * deviation;
+            var zDeviation = zg - 1.0;
+            var weighted = (Z_WEIGHT * zDeviation * zDeviation) + (XY_WEIGHT * ((xg * xg) + (yg * yg)));
+            sumSquaredDeviation += weighted;
             sampleCount += 1;
         }
     }
