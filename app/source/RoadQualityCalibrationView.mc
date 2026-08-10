@@ -68,7 +68,7 @@ class RoadQualityCalibrationView extends Ui.View {
     // Lang.String has no split()/word-wrap helper in this SDK, so
     // multi-line prompts are just passed in pre-broken rather than
     // wrapped dynamically.
-    hidden function drawLines(dc as Gfx.Dc, w as Lang.Number, startY as Lang.Number, lines as Lang.Array<Lang.String>) as Void {
+    hidden function drawLines(dc as Gfx.Dc, w as Lang.Number, startY as Lang.Numeric, lines as Lang.Array<Lang.String>) as Void {
         var lineHeight = dc.getFontHeight(Gfx.FONT_TINY) * 1.1;
         var y = startY;
         for (var i = 0; i < lines.size(); i += 1) {
