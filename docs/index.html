@@ -482,6 +482,12 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
 
   var SEMICIRCLE_TO_DEG = 180 / Math.pow(2, 31);
 
+  // app/'s raw per-axis accelerometer readings (per-second average, in
+  // g) - not a roughness metric, so kept separate from FIELD_PRIORITY
+  // and not offered in the map-coloring dropdown, but still captured
+  // from the FIT file for completeness/diagnostics.
+  var AXIS_FIELD_NAMES = ["accel_x_g", "accel_y_g", "accel_z_g"];
+
   // Mirrors tools/fit_to_json.py's output shape, so the exact same
   // rendering code (loadData/renderField/renderStats) handles both a
   // directly-uploaded .FIT file and a pre-converted ride.json.
@@ -506,6 +512,7 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
           speed_mps: speed
         };
         FIELD_PRIORITY.forEach(function (name) { out[name] = null; });
+        AXIS_FIELD_NAMES.forEach(function (name) { out[name] = null; });
         if (r.developerFields) {
           Object.keys(r.developerFields).forEach(function (key) {
             var name = devFieldNames[key];

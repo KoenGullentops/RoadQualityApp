@@ -51,14 +51,26 @@ code still can't touch the accelerometer at all).
 
 ## `app/` — standalone continuous app
 
+- **`source/RoadQualityCalibrator.mc`** / **`RoadQualityCalibrationView.mc`** /
+  **`RoadQualityCalibrationDelegate.mc`** — every launch starts here,
+  before the main screen: mount the device on the stem as normal, tap to
+  start, hold still for 1 second (measures each axis's actual resting
+  reading — its baseline, which absorbs whatever tilt this specific mount
+  has instead of assuming a perfect 1.0g on one axis), then lift the
+  front wheel ~10cm and drop it within the next 4 seconds. Whichever axis
+  swings furthest from its baseline during the drop is taken as the
+  "bump axis" for this ride. Tap to accept the result (or swipe to
+  retry) and it's handed to the recorder via `setCalibration()`, then the
+  app switches to the main screen. Redone every launch, in memory only
+  (not persisted), since mount position/angle can change between rides.
 - **`source/RoadQualityRecorder.mc`** — owns the FIT recording session,
   reads live accelerometer via `Sensor.registerSensorDataListener`, and
   once per second (via a 1 Hz timer) turns the accumulated samples into
-  an instantaneous "raw" roughness value: a weighted RMS deviation,
-  Z-axis (the mount's approximate vertical, where a flat-mounted device
-  reads ~1g at rest and a bump actually shows up) weighted 4x over X/Y
-  (braking, cornering, pedaling) - see `Z_WEIGHT`/`XY_WEIGHT` and the
-  Known caveats entry below. That raw value feeds three running averages:
+  an instantaneous "raw" roughness value: a weighted RMS deviation from
+  each axis's *calibrated* baseline (not an assumed 1.0g), with the
+  calibrated bump axis weighted 4x over the other two (`PRIMARY_WEIGHT`/
+  `SECONDARY_WEIGHT`) - see the calibration bullet above and the Known
+  caveats entry below. That raw value feeds three running averages:
   - **1 min / 5 min**: a ring buffer of the last 60 / 300 per-second
     values (a true sliding window, O(1) per update).
   - **Trip**: a running sum/count since recording started.
@@ -68,13 +80,16 @@ code still can't touch the accelerometer at all).
   `roughness_1min_g`, `roughness_5min_g`, `roughness_trip_g`) via
   `Toybox.FitContributor` - `roughness_raw_g` is the unsmoothed
   per-second signal, useful when a Google Maps/`docs/` overlay needs
-  finer detail than the rolling averages give. The same per-second
-  instantaneous reading also feeds a whole-trip history graph: a
-  120-point buffer that automatically halves its own resolution (doubling
-  seconds-per-point) whenever it fills up, so a ride of any length fits
-  in a fixed amount of memory — recent history at higher resolution,
-  older history coarser, same idea as how a browser's zoomed-out
-  performance graph works.
+  finer detail than the rolling averages give. The raw per-second average
+  of each individual axis is also written (`accel_x_g`, `accel_y_g`,
+  `accel_z_g`), independent of the weighting/calibration above, so a full
+  ride can be re-analyzed later without having to re-record it. The same
+  per-second instantaneous reading also feeds a whole-trip history graph:
+  a 120-point buffer that automatically halves its own resolution
+  (doubling seconds-per-point) whenever it fills up, so a ride of any
+  length fits in a fixed amount of memory — recent history at higher
+  resolution, older history coarser, same idea as how a browser's
+  zoomed-out performance graph works.
 - **`source/RoadQualityView.mc`** — the main screen: recording status, a
   top-right GPS fix indicator (green/yellow/orange/gray/red for
   good/usable/poor/last-known/no fix, from
@@ -244,10 +259,12 @@ python3 tools/fit_to_json.py path/to/ride.fit ride.json
   "generated_at": "2026-08-09T14:52:59+00:00",
   "record_count": 1830,
   "roughness_fields_present": ["roughness_raw_g", "roughness_1min_g", "roughness_5min_g", "roughness_trip_g"],
+  "axis_fields_present": ["accel_x_g", "accel_y_g", "accel_z_g"],
   "road_quality": [
     { "timestamp": "2026-08-09T14:52:37+00:00", "epoch": 1786200757.0,
       "lat": 50.85, "lon": 4.35, "speed_mps": 6.1,
-      "roughness_raw_g": 0.14, "roughness_1min_g": 0.11, "roughness_5min_g": 0.09, "roughness_trip_g": 0.10 },
+      "roughness_raw_g": 0.14, "roughness_1min_g": 0.11, "roughness_5min_g": 0.09, "roughness_trip_g": 0.10,
+      "accel_x_g": 0.02, "accel_y_g": -0.01, "accel_z_g": 0.97 },
     ...
   ]
 }
@@ -264,18 +281,25 @@ is empty, the ride wasn't recorded with either app.
 ## Known caveats
 
 - The roughness score is a weighted RMS deviation, not a raw physical
-  measurement: the Z axis (deviation from the ~1g gravity reading a
-  flat-mounted device sees at rest - the axis a vertical bump actually
-  perturbs) is weighted 4x over X/Y (`Z_WEIGHT`/`XY_WEIGHT` in both
-  `RoadQualityRecorder` and `RoadQualityServiceDelegate`), since X/Y
-  mostly reflect braking, cornering, and pedaling rather than road
-  surface. This assumes a standard flat, screen-up mount (out-front or
-  stem) - a significantly tilted or non-standard mount would throw off
-  which axis actually reads "vertical." An earlier version used
-  orientation-independent total acceleration magnitude instead (immune
-  to mount angle, but couldn't distinguish a bump from a hard brake);
-  this was changed deliberately, trading that independence for the
-  ability to prioritize actual bumps.
+  measurement, and the two apps now compute it differently:
+  - `app/` calibrates every launch (see `RoadQualityCalibrator` above):
+    the axis that actually responds to a bump on this specific mount is
+    weighted 4x over the other two (`PRIMARY_WEIGHT`/`SECONDARY_WEIGHT`
+    in `RoadQualityRecorder`), and deviation is measured from each
+    axis's own measured resting reading, not an assumed 1.0g.
+  - `datafield/` still hardcodes the Z axis at an assumed 1.0g baseline
+    (`Z_WEIGHT`/`XY_WEIGHT` in `RoadQualityServiceDelegate`) - a Data
+    Field can't read the accelerometer outside its 5-minute background
+    window, so it can't run an interactive calibration screen either.
+    This assumes a standard flat, screen-up mount (out-front or stem); a
+    significantly tilted mount would throw off which axis actually reads
+    "vertical" for `datafield/` specifically.
+
+  Both replaced an earlier version that used orientation-independent
+  total acceleration magnitude instead (immune to mount angle, but
+  couldn't distinguish a bump from a hard brake); this was changed
+  deliberately, trading that independence for the ability to prioritize
+  actual bumps.
 - The accelerometer's live sample rate/callback cadence is fixed by the
   hardware/firmware; there's no Connect IQ API to request a specific rate.
 - `app/`'s core recording (session, accelerometer sampling, the three
@@ -286,6 +310,13 @@ is empty, the ride wasn't recorded with either app.
   project built against a Garmin API (`MapView`) with known, documented
   reliability issues on real hardware, rather than just an API we guessed
   wrong about and could fix once we saw the error.
+- The calibration screen (`RoadQualityCalibrator`/`RoadQualityCalibrationView`/
+  `RoadQualityCalibrationDelegate`) is new and unverified on real
+  hardware - in particular, whether the 1-second baseline window and
+  4-second capture window are actually enough time in practice to lift
+  and drop the wheel without rushing, and whether `MIN_CONFIDENT_PEAK`
+  (0.08g) is a sane threshold for a real drop versus sensor noise, both
+  need a real test to confirm rather than just reasoning about them.
 - `datafield/` hasn't been tested on-device at all yet. The design is
   verified against the local SDK docs (background trigger types, Sensor's
   documented runtime contexts, `Background.exit`/`Storage` semantics) but

@@ -30,10 +30,27 @@ class RoadQualityRecorder {
     hidden var field1min as Fit.Field?;
     hidden var field5min as Fit.Field?;
     hidden var fieldTrip as Fit.Field?;
+    hidden var fieldAccelX as Fit.Field?;
+    hidden var fieldAccelY as Fit.Field?;
+    hidden var fieldAccelZ as Fit.Field?;
 
     // Accumulates live accelerometer samples between once-per-second ticks.
     hidden var sumSquaredDeviation as Lang.Float;
+    hidden var sumX as Lang.Float;
+    hidden var sumY as Lang.Float;
+    hidden var sumZ as Lang.Float;
     hidden var sampleCount as Lang.Number;
+
+    // Set by the calibration screen (RoadQualityCalibrator) before this
+    // recorder ever starts - which axis actually responds to a bump on
+    // this specific mount, and what each axis reads at rest (its own
+    // resting tilt, not an assumed 1.0g). Defaults here match the old
+    // hardcoded-Z-at-1g behavior, purely so getters never hand back
+    // garbage if start() were somehow called before calibration.
+    hidden var calibratedAxis as Lang.Number;
+    hidden var calibratedBaseX as Lang.Float;
+    hidden var calibratedBaseY as Lang.Float;
+    hidden var calibratedBaseZ as Lang.Float;
 
     // 1-minute sliding window (ring buffer + running sum, O(1) to update).
     hidden var buffer1 as Lang.Array<Lang.Float>;
@@ -107,7 +124,15 @@ class RoadQualityRecorder {
         gpsRoughness = new [GPS_HISTORY_MAX] as Lang.Array<Lang.Float>;
 
         sumSquaredDeviation = 0.0;
+        sumX = 0.0;
+        sumY = 0.0;
+        sumZ = 0.0;
         sampleCount = 0;
+
+        calibratedAxis = RoadQualityCalibrator.AXIS_Z;
+        calibratedBaseX = 0.0;
+        calibratedBaseY = 0.0;
+        calibratedBaseZ = 1.0;
 
         writeIndex1 = 0;
         filledCount1 = 0;
@@ -145,6 +170,9 @@ class RoadQualityRecorder {
     // just zeroes their contents) as well as from start().
     hidden function resetAccumulators() as Void {
         sumSquaredDeviation = 0.0;
+        sumX = 0.0;
+        sumY = 0.0;
+        sumZ = 0.0;
         sampleCount = 0;
 
         for (var i = 0; i < 60; i += 1) {
@@ -190,6 +218,17 @@ class RoadQualityRecorder {
         }
     }
 
+    // Called once by RoadQualityCalibrationDelegate after the user
+    // accepts a lift-and-drop calibration result, before this recorder
+    // ever starts. axis is one of RoadQualityCalibrator.AXIS_X/Y/Z; the
+    // base* values are each axis's own resting reading in g.
+    function setCalibration(axis as Lang.Number, baseX as Lang.Float, baseY as Lang.Float, baseZ as Lang.Float) as Void {
+        calibratedAxis = axis;
+        calibratedBaseX = baseX;
+        calibratedBaseY = baseY;
+        calibratedBaseZ = baseZ;
+    }
+
     function start() as Void {
         resetAccumulators();
         value1min = 0.0;
@@ -218,6 +257,18 @@ class RoadQualityRecorder {
             );
             fieldTrip = session.createField(
                 "roughness_trip_g", 3, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
+            fieldAccelX = session.createField(
+                "accel_x_g", 4, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
+            fieldAccelY = session.createField(
+                "accel_y_g", 5, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
+            fieldAccelZ = session.createField(
+                "accel_z_g", 6, Fit.DATA_TYPE_FLOAT,
                 { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
             );
 
@@ -316,19 +367,18 @@ class RoadQualityRecorder {
         state = STATE_STOPPED;
     }
 
-    // Weighted toward the Z axis, which is where bumps/potholes actually
-    // show up: mounted flat on a standard out-front/stem mount (screen
-    // up), the device's local Z axis is approximately vertical, so it's
-    // the axis gravity projects onto (a still bike reads ~1g on Z) and
-    // the one a vertical jolt perturbs most directly. X/Y mostly reflect
-    // braking, cornering, and pedaling forces rather than road surface,
-    // so they're weighted down rather than dropped entirely - a rough
-    // patch still jostles the mount sideways somewhat. This trades away
-    // the previous total-magnitude approach's orientation independence
-    // for a mount-orientation assumption that matches how these devices
-    // are actually mounted in practice.
-    hidden const Z_WEIGHT as Lang.Float = 1.0;
-    hidden const XY_WEIGHT as Lang.Float = 0.25;
+    // Weighted toward whichever axis the lift-and-drop calibration
+    // (RoadQualityCalibrator) identified as the one that actually
+    // responds to a vertical bump on this specific mount, deviation
+    // measured from that axis's own calibrated resting reading rather
+    // than an assumed 1.0g - a tilted stem mount otherwise biases every
+    // reading, since gravity doesn't land exactly on one axis. The other
+    // two axes mostly reflect braking, cornering, and pedaling forces
+    // rather than road surface, so they're weighted down rather than
+    // dropped entirely - a rough patch still jostles the mount sideways
+    // somewhat. This replaced an earlier hardcoded-Z-at-1g version.
+    hidden const PRIMARY_WEIGHT as Lang.Float = 1.0;
+    hidden const SECONDARY_WEIGHT as Lang.Float = 0.25;
 
     function onSensorData(sensorData as Sensor.SensorData) as Void {
         var accel = sensorData.accelerometerData;
@@ -347,8 +397,24 @@ class RoadQualityRecorder {
             var xg = xs[i] / 1000.0;
             var yg = ys[i] / 1000.0;
             var zg = zs[i] / 1000.0;
-            var zDeviation = zg - 1.0;
-            var weighted = (Z_WEIGHT * zDeviation * zDeviation) + (XY_WEIGHT * ((xg * xg) + (yg * yg)));
+
+            sumX += xg;
+            sumY += yg;
+            sumZ += zg;
+
+            var devX = xg - calibratedBaseX;
+            var devY = yg - calibratedBaseY;
+            var devZ = zg - calibratedBaseZ;
+
+            var weighted = 0.0;
+            if (calibratedAxis == RoadQualityCalibrator.AXIS_X) {
+                weighted = (PRIMARY_WEIGHT * devX * devX) + (SECONDARY_WEIGHT * ((devY * devY) + (devZ * devZ)));
+            } else if (calibratedAxis == RoadQualityCalibrator.AXIS_Y) {
+                weighted = (PRIMARY_WEIGHT * devY * devY) + (SECONDARY_WEIGHT * ((devX * devX) + (devZ * devZ)));
+            } else {
+                weighted = (PRIMARY_WEIGHT * devZ * devZ) + (SECONDARY_WEIGHT * ((devX * devX) + (devY * devY)));
+            }
+
             sumSquaredDeviation += weighted;
             sampleCount += 1;
         }
@@ -356,10 +422,19 @@ class RoadQualityRecorder {
 
     function onTimerTick() as Void {
         var instant = 0.0;
+        var avgX = 0.0;
+        var avgY = 0.0;
+        var avgZ = 0.0;
         if (sampleCount > 0) {
             instant = Math.sqrt(sumSquaredDeviation / sampleCount);
+            avgX = sumX / sampleCount;
+            avgY = sumY / sampleCount;
+            avgZ = sumZ / sampleCount;
         }
         sumSquaredDeviation = 0.0;
+        sumX = 0.0;
+        sumY = 0.0;
+        sumZ = 0.0;
         sampleCount = 0;
 
         if (filledCount1 < 60) {
@@ -392,6 +467,9 @@ class RoadQualityRecorder {
         if (field1min != null) { field1min.setData(value1min); }
         if (field5min != null) { field5min.setData(value5min); }
         if (fieldTrip != null) { fieldTrip.setData(valueTrip); }
+        if (fieldAccelX != null) { fieldAccelX.setData(avgX); }
+        if (fieldAccelY != null) { fieldAccelY.setData(avgY); }
+        if (fieldAccelZ != null) { fieldAccelZ.setData(avgZ); }
 
         recordHistory(instant);
         recordGpsBreadcrumb(instant);

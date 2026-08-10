@@ -5,7 +5,8 @@ whichever road-roughness developer fields are present, written by either:
 
 - app/ (standalone app, own recording session): roughness_raw_g (the
   unsmoothed instantaneous reading), roughness_1min_g, roughness_5min_g,
-  roughness_trip_g, continuously updated every second.
+  roughness_trip_g, continuously updated every second, plus the raw
+  per-axis accel_x_g/accel_y_g/accel_z_g (per-second averages, in g).
 - datafield/ (Data Field tile on a normal Ride activity): roughness_snapshot_g
   (a background-sampled snapshot updated roughly every 5 minutes) and
   roughness_trip_avg_g (the running average of all snapshots so far this trip).
@@ -37,6 +38,16 @@ ROUGHNESS_FIELDS = {
     "roughness_trip_g": "roughness_trip_g",
     "roughness_snapshot_g": "roughness_snapshot_g",
     "roughness_trip_avg_g": "roughness_trip_avg_g",
+}
+
+# app/'s raw per-axis accelerometer readings (per-second average, in g),
+# written alongside the roughness fields above - kept in a separate dict
+# since these aren't a roughness metric themselves and shouldn't affect
+# roughness_fields_present or docs/'s metric picker.
+AXIS_FIELDS = {
+    "accel_x_g": "accel_x_g",
+    "accel_y_g": "accel_y_g",
+    "accel_z_g": "accel_z_g",
 }
 
 
@@ -71,6 +82,8 @@ def read_records(fit):
         }
         for field_name, json_key in ROUGHNESS_FIELDS.items():
             record[json_key] = values.get(field_name)
+        for field_name, json_key in AXIS_FIELDS.items():
+            record[json_key] = values.get(field_name)
 
         records.append(record)
 
@@ -93,6 +106,10 @@ def main():
         json_key for json_key in ROUGHNESS_FIELDS.values()
         if any(r[json_key] is not None for r in records)
     ]
+    present_axis_fields = [
+        json_key for json_key in AXIS_FIELDS.values()
+        if any(r[json_key] is not None for r in records)
+    ]
 
     if not present_fields:
         print("Warning: no records with any road-roughness developer field were found. "
@@ -103,14 +120,16 @@ def main():
         "generated_at": iso(datetime.now(tz=timezone.utc)),
         "record_count": len(records),
         "roughness_fields_present": present_fields,
+        "axis_fields_present": present_axis_fields,
         "road_quality": records,
     }
 
     with open(args.json_file, "w") as f:
         json.dump(output, f, indent=2)
 
-    print("Wrote {} records to {} (roughness fields present: {})".format(
-        len(records), args.json_file, ", ".join(present_fields) or "none"))
+    print("Wrote {} records to {} (roughness fields present: {}; axis fields present: {})".format(
+        len(records), args.json_file, ", ".join(present_fields) or "none",
+        ", ".join(present_axis_fields) or "none"))
 
 
 if __name__ == "__main__":
