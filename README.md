@@ -107,11 +107,12 @@ code still can't touch the accelerometer at all).
   in `MAP_MODE_BROWSE` (full cartography, not the simplified
   `MAP_MODE_PREVIEW`), with your GPS breadcrumb trail for the trip drawn
   on top **colored live by roughness** (green/smooth through yellow to
-  red/rough, auto-scaled to the trip's min/max so far — same gradient as
-  the `docs/` web viewer). Since `MapPolyline` only supports one solid
-  color per polyline, this is built from many short two-point polylines,
-  one per breadcrumb segment, re-added on every redraw. Tap, select, or
-  back returns to the main screen.
+  red/rough, scaled to the 5th-95th percentile of riding-only readings —
+  see Known caveats below for why plain min/max didn't work). Since
+  `MapPolyline` only supports one solid color per polyline, this is built
+  from many short two-point polylines, one per breadcrumb segment,
+  re-added on every redraw. Tap, select, or back returns to the main
+  screen.
 
   **A pre-planned route/GPX course cannot be drawn here** — confirmed
   against the local Connect IQ SDK docs, `PersistedContent.Course`'s
@@ -280,6 +281,29 @@ is empty, the ride wasn't recorded with either app.
 
 ## Known caveats
 
+- **Map color-coding fix (both `app/`'s map screen and `docs/`):**
+  diagnosed against a real 47-minute ride where the map came out almost
+  entirely green, with color only showing up during a brief
+  walk-the-bike segment. Two compounding causes, both now fixed:
+  - The color scale was linear min/max over every point. A cumulative
+    metric like `roughness_trip_g` barely moves over the back half of
+    any real ride (riding-only p5-p95 spread was only 1.35x in the test
+    ride), so it was a bad default to color by in the first place -
+    `docs/index.html`'s `FIELD_PRIORITY` now defaults to the
+    least-smoothed field available (`roughness_raw_g` first) instead.
+    Separately, a handful of outlier readings (a hard pothole, or any
+    walking data - see below) could still stretch a min/max scale far
+    enough to squash everything else toward one end. Both apps now scale
+    color to the 5th-95th percentile of readings instead of raw min/max.
+  - Walking with the bike (at the start/end of that test ride) produced
+    accelerometer readings several times rougher than any actual
+    pavement in the ride - not road-surface data at all, just noise from
+    a completely different kind of motion. Below `MIN_RIDING_SPEED_MPS`
+    (1.5 m/s, both apps), points are now excluded from the color
+    scale/stats entirely and drawn as neutral gray on the map rather than
+    colored. Files with no speed data at all still color/stat normally
+    (`docs/`'s `isRidingSpeed()` treats missing speed as "riding", not
+    excluded).
 - The roughness score is a weighted RMS deviation, not a raw physical
   measurement, and the two apps now compute it differently:
   - `app/` calibrates every launch (see `RoadQualityCalibrator` above):

@@ -245,13 +245,22 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
   // Preference order when a file has more than one roughness field
   // present (e.g. app/'s three rolling averages) - falls back to
   // whatever is actually available.
+  // Default-selection order when a file has more than one field. Favors
+  // the least-smoothed metric first: a map is meant to show *spatial*
+  // variation, and roughness_trip_g/roughness_trip_avg_g are cumulative
+  // averages since the start of the ride - by definition they barely
+  // move over the back half of any real ride (confirmed against a real
+  // 47-minute ride: riding-only p5-p95 spread was 1.35x for
+  // roughness_trip_g vs 2.75x for roughness_raw_g), so defaulting to
+  // them makes the map look nearly uniform regardless of any color-scale
+  // fix. They're still selectable in the dropdown, just not the default.
   var FIELD_PRIORITY = [
-    "roughness_trip_g",
-    "roughness_trip_avg_g",
-    "roughness_5min_g",
-    "roughness_snapshot_g",
+    "roughness_raw_g",
     "roughness_1min_g",
-    "roughness_raw_g"
+    "roughness_snapshot_g",
+    "roughness_5min_g",
+    "roughness_trip_avg_g",
+    "roughness_trip_g"
   ];
 
   var FIELD_LABELS = {
@@ -281,6 +290,32 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
       maxZoom: 19,
       attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
     }).addTo(map);
+  }
+
+  // Below this, treated as walking/stopped rather than riding - the
+  // accelerometer picks up much more chaotic motion off the bike
+  // (footsteps, an unevenly pushed bike) that isn't road-surface data at
+  // all, and folding it into the color scale or stats badly distorts
+  // both (a short walking segment can read several times rougher than
+  // any actual pavement in the ride). speed_mps === null (no speed data
+  // in this file at all) is treated as riding, not excluded, so files
+  // without speed still color/stat normally.
+  var MIN_RIDING_SPEED_MPS = 1.5;
+
+  function isRidingSpeed(speedMps) {
+    return speedMps === null || speedMps === undefined || speedMps >= MIN_RIDING_SPEED_MPS;
+  }
+
+  // Linear min/max is fragile to a single outlier (one hard pothole, or
+  // any leftover walking/stopped sample) stretching the whole scale so
+  // far that every other reading collapses toward one end. Percentile
+  // clamping keeps the scale representative of the bulk of the ride;
+  // values beyond it just clamp to the extreme color instead of
+  // distorting everyone else's.
+  function percentile(sortedValues, p) {
+    if (sortedValues.length === 0) { return 0; }
+    var idx = Math.min(sortedValues.length - 1, Math.floor(sortedValues.length * p));
+    return sortedValues[idx];
   }
 
   function roughnessColor(value, min, max) {
@@ -337,7 +372,9 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
     var withGps = records.filter(function (r) { return r.lat !== null && r.lon !== null; });
     var known = [];
     for (var i = 0; i < records.length; i += 1) {
-      if (values[i] !== null && records[i].lat !== null) { known.push(values[i]); }
+      if (values[i] !== null && records[i].lat !== null && isRidingSpeed(records[i].speed_mps)) {
+        known.push(values[i]);
+      }
     }
     var avg = known.length ? known.reduce(function (a, b) { return a + b; }, 0) / known.length : null;
     var max = known.length ? Math.max.apply(null, known) : null;
@@ -399,7 +436,13 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
     var withGps = [];
     for (var i = 0; i < records.length; i += 1) {
       if (records[i].lat !== null && records[i].lon !== null && values[i] !== null) {
-        withGps.push({ lat: records[i].lat, lon: records[i].lon, value: values[i], ts: records[i].timestamp });
+        withGps.push({
+          lat: records[i].lat,
+          lon: records[i].lon,
+          value: values[i],
+          ts: records[i].timestamp,
+          riding: isRidingSpeed(records[i].speed_mps)
+        });
       }
     }
 
@@ -416,11 +459,25 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
       return;
     }
 
-    var min = withGps[0].value;
-    var max = withGps[0].value;
-    for (var j = 1; j < withGps.length; j += 1) {
-      if (withGps[j].value < min) { min = withGps[j].value; }
-      if (withGps[j].value > max) { max = withGps[j].value; }
+    // Color scale is built only from riding samples (walking/stopped
+    // points are drawn but never included), and clamped to the 5th-95th
+    // percentile rather than raw min/max so one outlier - a single hard
+    // pothole, or any walking sample that slipped past the speed check
+    // (e.g. a file with no speed data at all) - can't wash out every
+    // other reading into "green". Falls back to plain min/max over
+    // everything if there's too little riding data to get percentiles
+    // from, so short/odd test rides still render something.
+    var ridingValues = withGps.filter(function (p) { return p.riding; }).map(function (p) { return p.value; });
+    var min, max;
+    if (ridingValues.length >= 5) {
+      var sorted = ridingValues.slice().sort(function (a, b) { return a - b; });
+      min = percentile(sorted, 0.05);
+      max = percentile(sorted, 0.95);
+      if (max <= min) { max = sorted[sorted.length - 1]; }
+    } else {
+      var allValues = withGps.map(function (p) { return p.value; });
+      min = Math.min.apply(null, allValues);
+      max = Math.max.apply(null, allValues);
     }
 
     routeLayer = L.layerGroup();
@@ -428,12 +485,18 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
       var p1 = withGps[k - 1];
       var p2 = withGps[k];
       var avgValue = (p1.value + p2.value) / 2;
+      var bothRiding = p1.riding && p2.riding;
       var seg = L.polyline(
         [[p1.lat, p1.lon], [p2.lat, p2.lon]],
-        { color: roughnessColor(avgValue, min, max), weight: 5, opacity: 0.85 }
+        {
+          color: bothRiding ? roughnessColor(avgValue, min, max) : "#888888",
+          weight: 5,
+          opacity: bothRiding ? 0.85 : 0.5
+        }
       );
       seg.bindPopup(
-        "<b>" + avgValue.toFixed(2) + " g</b><br>" + escapeHtml(p2.ts || "")
+        (bothRiding ? ("<b>" + avgValue.toFixed(2) + " g</b>") : "<b>walking/stopped</b>") +
+        "<br>" + escapeHtml(p2.ts || "")
       );
       routeLayer.addLayer(seg);
     }
@@ -442,7 +505,7 @@ var DEFAULT_RIDE_FIT_BASE64 = "DiCTCHxHAAAuRklUPUJAAAAAAAcDBIwEBIYHBIYBAoQCAoQFA
     var bounds = L.latLngBounds(withGps.map(function (p) { return [p.lat, p.lon]; }));
     map.fitBounds(bounds, { padding: [30, 30] });
 
-    document.getElementById("legendTitle").textContent = (FIELD_LABELS[field] || field);
+    document.getElementById("legendTitle").textContent = (FIELD_LABELS[field] || field) + " (5th-95th pct)";
     document.getElementById("legendMin").textContent = min.toFixed(2) + " g";
     document.getElementById("legendMax").textContent = max.toFixed(2) + " g";
     legendEl.classList.remove("hidden");

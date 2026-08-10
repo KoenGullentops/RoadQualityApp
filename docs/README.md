@@ -54,10 +54,23 @@ server-side dependencies.
   between samples so the whole route still gets colored — meaning
   stretches of road between snapshots show the *previous* reading, not
   necessarily what that specific stretch was actually like.
-- The color scale is normalized to the min/max roughness within the
-  loaded ride, not a fixed absolute scale — so "red" on one ride and
-  "red" on another don't necessarily mean the same actual roughness
-  value. The legend always shows the actual g values for the loaded ride.
+- The color scale is normalized to the loaded ride, not a fixed absolute
+  scale — so "red" on one ride and "red" on another don't necessarily
+  mean the same actual roughness value. The legend always shows the
+  actual g values for the loaded ride. It's the 5th-95th percentile of
+  riding-only readings, not raw min/max — a single outlier (a hard
+  pothole, or a walking/stopped sample) can't stretch the whole scale and
+  wash out every other reading toward one color, which is what raw
+  min/max did on a real test ride (see the root-cause writeup in the
+  main README's Known caveats). Points below `MIN_RIDING_SPEED_MPS`
+  (1.5 m/s, from the ride's own `speed_mps`) are excluded from the color
+  scale and stats, and drawn gray on the map rather than colored, since
+  that's walking/stopped, not road-surface data. Files with no speed
+  data at all still color/stat normally. The dropdown also now defaults
+  to the least-smoothed metric available (`roughness_raw_g` first,
+  cumulative trip averages last) - a cumulative average barely moves
+  over the second half of a real ride, so it made a poor default to
+  color a *map* by, even before the scale/walking fixes above.
 - Leaflet and the FIT decoder are both vendored (`vendor/leaflet/`,
   `vendor/fitsdk/`) rather than loaded from a CDN, so the page has no
   external script dependency and works from a plain `file://` open with
