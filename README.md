@@ -54,16 +54,21 @@ code still can't touch the accelerometer at all).
 - **`source/RoadQualityRecorder.mc`** — owns the FIT recording session,
   reads live accelerometer via `Sensor.registerSensorDataListener`, and
   once per second (via a 1 Hz timer) turns the accumulated samples into
-  an instantaneous roughness value: the RMS of `|acceleration| - 1g` (how
-  far the total acceleration deviates from gravity). That value feeds
-  three running averages:
+  an instantaneous "raw" roughness value: a weighted RMS deviation,
+  Z-axis (the mount's approximate vertical, where a flat-mounted device
+  reads ~1g at rest and a bump actually shows up) weighted 4x over X/Y
+  (braking, cornering, pedaling) - see `Z_WEIGHT`/`XY_WEIGHT` and the
+  Known caveats entry below. That raw value feeds three running averages:
   - **1 min / 5 min**: a ring buffer of the last 60 / 300 per-second
     values (a true sliding window, O(1) per update).
   - **Trip**: a running sum/count since recording started.
 
-  All three are written into the session's FIT file every second as
-  developer fields (`roughness_1min_g`, `roughness_5min_g`,
-  `roughness_trip_g`) via `Toybox.FitContributor`. The same per-second
+  The raw value and all three averages are written into the session's
+  FIT file every second as developer fields (`roughness_raw_g`,
+  `roughness_1min_g`, `roughness_5min_g`, `roughness_trip_g`) via
+  `Toybox.FitContributor` - `roughness_raw_g` is the unsmoothed
+  per-second signal, useful when a Google Maps/`docs/` overlay needs
+  finer detail than the rolling averages give. The same per-second
   instantaneous reading also feeds a whole-trip history graph: a
   120-point buffer that automatically halves its own resolution (doubling
   seconds-per-point) whenever it fills up, so a ride of any length fits
@@ -238,11 +243,11 @@ python3 tools/fit_to_json.py path/to/ride.fit ride.json
   "source_fit_file": "ride.fit",
   "generated_at": "2026-08-09T14:52:59+00:00",
   "record_count": 1830,
-  "roughness_fields_present": ["roughness_1min_g", "roughness_5min_g", "roughness_trip_g"],
+  "roughness_fields_present": ["roughness_raw_g", "roughness_1min_g", "roughness_5min_g", "roughness_trip_g"],
   "road_quality": [
     { "timestamp": "2026-08-09T14:52:37+00:00", "epoch": 1786200757.0,
       "lat": 50.85, "lon": 4.35, "speed_mps": 6.1,
-      "roughness_1min_g": 0.11, "roughness_5min_g": 0.09, "roughness_trip_g": 0.10 },
+      "roughness_raw_g": 0.14, "roughness_1min_g": 0.11, "roughness_5min_g": 0.09, "roughness_trip_g": 0.10 },
     ...
   ]
 }

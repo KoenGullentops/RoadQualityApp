@@ -3,8 +3,9 @@
 Convert a Road Quality FIT file into a JSON file with the GPS track and
 whichever road-roughness developer fields are present, written by either:
 
-- app/ (standalone app, own recording session): roughness_1min_g,
-  roughness_5min_g, roughness_trip_g, continuously updated every second.
+- app/ (standalone app, own recording session): roughness_raw_g (the
+  unsmoothed instantaneous reading), roughness_1min_g, roughness_5min_g,
+  roughness_trip_g, continuously updated every second.
 - datafield/ (Data Field tile on a normal Ride activity): roughness_snapshot_g
   (a background-sampled snapshot updated roughly every 5 minutes) and
   roughness_trip_avg_g (the running average of all snapshots so far this trip).
@@ -30,6 +31,7 @@ SEMICIRCLE_TO_DEG = 180.0 / (2 ** 31)
 
 # Developer field name -> the JSON key it's reported under.
 ROUGHNESS_FIELDS = {
+    "roughness_raw_g": "roughness_raw_g",
     "roughness_1min_g": "roughness_1min_g",
     "roughness_5min_g": "roughness_5min_g",
     "roughness_trip_g": "roughness_trip_g",

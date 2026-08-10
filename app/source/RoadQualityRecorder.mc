@@ -26,6 +26,7 @@ class RoadQualityRecorder {
     hidden var session as Recording.Session?;
     hidden var timer as Timer.Timer;
 
+    hidden var fieldRaw as Fit.Field?;
     hidden var field1min as Fit.Field?;
     hidden var field5min as Fit.Field?;
     hidden var fieldTrip as Fit.Field?;
@@ -203,16 +204,20 @@ class RoadQualityRecorder {
                 :subSport => Activity.SUB_SPORT_GENERIC
             });
 
+            fieldRaw = session.createField(
+                "roughness_raw_g", 0, Fit.DATA_TYPE_FLOAT,
+                { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
+            );
             field1min = session.createField(
-                "roughness_1min_g", 0, Fit.DATA_TYPE_FLOAT,
+                "roughness_1min_g", 1, Fit.DATA_TYPE_FLOAT,
                 { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
             );
             field5min = session.createField(
-                "roughness_5min_g", 1, Fit.DATA_TYPE_FLOAT,
+                "roughness_5min_g", 2, Fit.DATA_TYPE_FLOAT,
                 { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
             );
             fieldTrip = session.createField(
-                "roughness_trip_g", 2, Fit.DATA_TYPE_FLOAT,
+                "roughness_trip_g", 3, Fit.DATA_TYPE_FLOAT,
                 { :mesgType => Fit.MESG_TYPE_RECORD, :units => "g" }
             );
 
@@ -383,6 +388,7 @@ class RoadQualityRecorder {
         tripCount += 1;
         valueTrip = tripSum / tripCount;
 
+        if (fieldRaw != null) { fieldRaw.setData(instant); }
         if (field1min != null) { field1min.setData(value1min); }
         if (field5min != null) { field5min.setData(value5min); }
         if (fieldTrip != null) { fieldTrip.setData(valueTrip); }
