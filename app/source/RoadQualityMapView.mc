@@ -109,6 +109,12 @@ class RoadQualityMapView extends Ui.MapView {
 
     // Same green (smooth) -> yellow -> red (rough) gradient as the docs/
     // web viewer's roughnessColor(), scaled to this trip's min/max so far.
+    // Graphics.ColorType is just a packed 0xRRGGBB Number (confirmed from
+    // the ColorValue constants, e.g. COLOR_GREEN = 0x00FF00), available
+    // since API Level 1.0.0 - built directly with bit shifts instead of
+    // Graphics.createColor(), which needs API Level 4.0.0 and isn't
+    // supported on the Edge 1030 Plus (confirmed by an actual build
+    // error: "Device 'edge1030plus' does not support API Level '4.0.0'").
     hidden function roughnessColor(value as Lang.Float, minValue as Lang.Float, maxValue as Lang.Float) as Gfx.ColorType {
         var t = 0.0;
         if (maxValue > minValue) {
@@ -124,7 +130,7 @@ class RoadQualityMapView extends Ui.MapView {
         } else {
             g = Math.round(255 * (1 - (t - 0.5) / 0.5)).toNumber();
         }
-        return Gfx.createColor(255, r, g, 0);
+        return (r << 16) | (g << 8);
     }
 
 }
