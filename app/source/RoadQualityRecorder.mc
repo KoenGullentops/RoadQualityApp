@@ -69,14 +69,18 @@ class RoadQualityRecorder {
     // GPS breadcrumb trail for the map screen: same bounded/downsampling
     // technique as the roughness history, applied to lat/lon instead of a
     // single scalar - so a ride of any length still fits in a fixed
-    // number of points.
+    // number of points. gpsRoughness carries the same bucket's average
+    // instantaneous roughness alongside each point, so the map screen can
+    // color each breadcrumb segment by how rough that stretch actually was.
     hidden const GPS_HISTORY_MAX as Lang.Number = 120;
     hidden var gpsLat as Lang.Array<Lang.Double>;
     hidden var gpsLon as Lang.Array<Lang.Double>;
+    hidden var gpsRoughness as Lang.Array<Lang.Float>;
     hidden var gpsCount as Lang.Number;
     hidden var gpsBucketTarget as Lang.Number;
     hidden var gpsBucketLatSum as Lang.Double;
     hidden var gpsBucketLonSum as Lang.Double;
+    hidden var gpsBucketRoughnessSum as Lang.Float;
     hidden var gpsBucketCount as Lang.Number;
 
     // Set when start() fails, so the view can show what went wrong
@@ -99,6 +103,7 @@ class RoadQualityRecorder {
         history = new [HISTORY_MAX] as Lang.Array<Lang.Float>;
         gpsLat = new [GPS_HISTORY_MAX] as Lang.Array<Lang.Double>;
         gpsLon = new [GPS_HISTORY_MAX] as Lang.Array<Lang.Double>;
+        gpsRoughness = new [GPS_HISTORY_MAX] as Lang.Array<Lang.Float>;
 
         sumSquaredDeviation = 0.0;
         sampleCount = 0;
@@ -124,6 +129,7 @@ class RoadQualityRecorder {
         gpsBucketTarget = 1;
         gpsBucketLatSum = 0.0d;
         gpsBucketLonSum = 0.0d;
+        gpsBucketRoughnessSum = 0.0;
         gpsBucketCount = 0;
 
         value1min = 0.0;
@@ -167,6 +173,7 @@ class RoadQualityRecorder {
         gpsBucketTarget = 1;
         gpsBucketLatSum = 0.0d;
         gpsBucketLonSum = 0.0d;
+        gpsBucketRoughnessSum = 0.0;
         gpsBucketCount = 0;
     }
 
@@ -367,14 +374,17 @@ class RoadQualityRecorder {
         if (fieldTrip != null) { fieldTrip.setData(valueTrip); }
 
         recordHistory(instant);
-        recordGpsBreadcrumb();
+        recordGpsBreadcrumb(instant);
 
         Ui.requestUpdate();
     }
 
     // Folds the current GPS fix (if any) into the breadcrumb trail used
-    // by the map screen, once per second alongside everything else.
-    hidden function recordGpsBreadcrumb() as Void {
+    // by the map screen, once per second alongside everything else. Also
+    // carries this second's instantaneous roughness reading along with
+    // the point, so the map can color each segment by how rough that
+    // stretch was.
+    hidden function recordGpsBreadcrumb(instant as Lang.Float) as Void {
         var info = Activity.getActivityInfo();
 
         var loc = info.currentLocation;
@@ -384,12 +394,13 @@ class RoadQualityRecorder {
         }
 
         var degrees = loc.toDegrees();
-        recordGpsPoint(degrees[0], degrees[1]);
+        recordGpsPoint(degrees[0], degrees[1], instant);
     }
 
-    hidden function recordGpsPoint(lat as Lang.Double, lon as Lang.Double) as Void {
+    hidden function recordGpsPoint(lat as Lang.Double, lon as Lang.Double, instant as Lang.Float) as Void {
         gpsBucketLatSum += lat;
         gpsBucketLonSum += lon;
+        gpsBucketRoughnessSum += instant;
         gpsBucketCount += 1;
 
         if (gpsBucketCount < gpsBucketTarget) {
@@ -398,8 +409,10 @@ class RoadQualityRecorder {
 
         var avgLat = gpsBucketLatSum / gpsBucketCount;
         var avgLon = gpsBucketLonSum / gpsBucketCount;
+        var avgRoughness = gpsBucketRoughnessSum / gpsBucketCount;
         gpsBucketLatSum = 0.0d;
         gpsBucketLonSum = 0.0d;
+        gpsBucketRoughnessSum = 0.0;
         gpsBucketCount = 0;
 
         if (gpsCount >= GPS_HISTORY_MAX) {
@@ -407,6 +420,7 @@ class RoadQualityRecorder {
             for (var i = 0; i < newCount; i += 1) {
                 gpsLat[i] = (gpsLat[2 * i] + gpsLat[2 * i + 1]) / 2.0d;
                 gpsLon[i] = (gpsLon[2 * i] + gpsLon[2 * i + 1]) / 2.0d;
+                gpsRoughness[i] = (gpsRoughness[2 * i] + gpsRoughness[2 * i + 1]) / 2.0;
             }
             gpsCount = newCount;
             gpsBucketTarget *= 2;
@@ -414,6 +428,7 @@ class RoadQualityRecorder {
 
         gpsLat[gpsCount] = avgLat;
         gpsLon[gpsCount] = avgLon;
+        gpsRoughness[gpsCount] = avgRoughness;
         gpsCount += 1;
     }
 
@@ -459,6 +474,7 @@ class RoadQualityRecorder {
 
     function getGpsLat() as Lang.Array<Lang.Double> { return gpsLat; }
     function getGpsLon() as Lang.Array<Lang.Double> { return gpsLon; }
+    function getGpsRoughness() as Lang.Array<Lang.Float> { return gpsRoughness; }
     function getGpsCount() as Lang.Number { return gpsCount; }
 
 }

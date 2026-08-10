@@ -2,13 +2,23 @@ using Toybox.WatchUi as Ui;
 using Toybox.Graphics as Gfx;
 using Toybox.Position as Position;
 using Toybox.System as Sys;
+using Toybox.Math as Math;
 using Toybox.Lang as Lang;
 
 // Real onboard-cartography map (Toybox.WatchUi.MapView), with the ride's
-// GPS breadcrumb trail drawn on top. A pre-planned Course cannot be drawn
-// here - PersistedContent.Course's public API (confirmed against the
-// local SDK docs) only exposes getId()/getName()/remove()/toIntent(), no
-// way to read a course's actual coordinates from a third-party app.
+// GPS breadcrumb trail drawn on top, colored by roughness (green/smooth
+// through yellow to red/rough - same gradient and auto-scaled min/max as
+// the docs/ web viewer). A pre-planned Course cannot be drawn here -
+// PersistedContent.Course's public API (confirmed against the local SDK
+// docs) only exposes getId()/getName()/remove()/toIntent(), no way to
+// read a course's actual coordinates from a third-party app.
+//
+// MapPolyline only supports one solid color per polyline (setColor()),
+// so the color-coded trail is built from many short two-point polylines,
+// one per breadcrumb segment, re-added on every redraw. setPolyline() is
+// documented as "Add" (not replace/set), so clear() is called first each
+// time to drop the previous redraw's segments rather than accumulating
+// them forever.
 //
 // Known to be less reliable than the rest of this app's UI - Garmin's
 // own bug tracker has reports of MapView/MapTrackView simply not
@@ -53,30 +63,37 @@ class RoadQualityMapView extends Ui.MapView {
     hidden function updatePolyline(count as Lang.Number) as Void {
         var lats = recorder.getGpsLat();
         var lons = recorder.getGpsLon();
-
-        var polyline = new Ui.MapPolyline();
-        polyline.setColor(Gfx.COLOR_RED);
-        polyline.setWidth(3);
+        var roughness = recorder.getGpsRoughness();
 
         var minLat = lats[0];
         var maxLat = lats[0];
         var minLon = lons[0];
         var maxLon = lons[0];
+        var minRoughness = roughness[0];
+        var maxRoughness = roughness[0];
 
-        for (var i = 0; i < count; i += 1) {
-            polyline.addLocation(new Position.Location({
-                :latitude => lats[i],
-                :longitude => lons[i],
-                :format => :degrees
-            }));
-
+        for (var i = 1; i < count; i += 1) {
             if (lats[i] < minLat) { minLat = lats[i]; }
             if (lats[i] > maxLat) { maxLat = lats[i]; }
             if (lons[i] < minLon) { minLon = lons[i]; }
             if (lons[i] > maxLon) { maxLon = lons[i]; }
+            if (roughness[i] < minRoughness) { minRoughness = roughness[i]; }
+            if (roughness[i] > maxRoughness) { maxRoughness = roughness[i]; }
         }
 
-        setPolyline(polyline);
+        clear();
+
+        for (var i = 1; i < count; i += 1) {
+            var segment = new Ui.MapPolyline();
+            var avgValue = (roughness[i - 1] + roughness[i]) / 2.0;
+            segment.setColor(roughnessColor(avgValue, minRoughness, maxRoughness));
+            segment.setWidth(4);
+            segment.addLocation([
+                new Position.Location({ :latitude => lats[i - 1], :longitude => lons[i - 1], :format => :degrees }),
+                new Position.Location({ :latitude => lats[i], :longitude => lons[i], :format => :degrees })
+            ]);
+            setPolyline(segment);
+        }
 
         // Pad the bounding box a bit so the route isn't drawn right at
         // the screen edge, with a floor so a near-stationary trip (tiny
@@ -88,6 +105,26 @@ class RoadQualityMapView extends Ui.MapView {
             new Position.Location({ :latitude => maxLat + latPad, :longitude => minLon - lonPad, :format => :degrees }),
             new Position.Location({ :latitude => minLat - latPad, :longitude => maxLon + lonPad, :format => :degrees })
         );
+    }
+
+    // Same green (smooth) -> yellow -> red (rough) gradient as the docs/
+    // web viewer's roughnessColor(), scaled to this trip's min/max so far.
+    hidden function roughnessColor(value as Lang.Float, minValue as Lang.Float, maxValue as Lang.Float) as Gfx.ColorType {
+        var t = 0.0;
+        if (maxValue > minValue) {
+            t = (value - minValue) / (maxValue - minValue);
+        }
+        if (t < 0.0) { t = 0.0; }
+        if (t > 1.0) { t = 1.0; }
+
+        var r = 255;
+        var g = 255;
+        if (t < 0.5) {
+            r = Math.round(255 * (t / 0.5)).toNumber();
+        } else {
+            g = Math.round(255 * (1 - (t - 0.5) / 0.5)).toNumber();
+        }
+        return Gfx.createColor(255, r, g, 0);
     }
 
 }

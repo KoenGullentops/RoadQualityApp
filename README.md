@@ -82,7 +82,12 @@ code still can't touch the accelerometer at all).
   available on devices with onboard cartography like the Edge 1030 Plus),
   in `MAP_MODE_BROWSE` (full cartography, not the simplified
   `MAP_MODE_PREVIEW`), with your GPS breadcrumb trail for the trip drawn
-  on top as a polyline. Tap, select, or back returns to the main screen.
+  on top **colored live by roughness** (green/smooth through yellow to
+  red/rough, auto-scaled to the trip's min/max so far — same gradient as
+  the `docs/` web viewer). Since `MapPolyline` only supports one solid
+  color per polyline, this is built from many short two-point polylines,
+  one per breadcrumb segment, re-added on every redraw. Tap, select, or
+  back returns to the main screen.
 
   **A pre-planned route/GPX course cannot be drawn here** — confirmed
   against the local Connect IQ SDK docs, `PersistedContent.Course`'s
@@ -275,3 +280,17 @@ is empty, the ride wasn't recorded with either app.
   trail were never actually populated in any test so far, not just
   "untested" as previously stated here. Retest all of `app/` on a real
   ride now that GPS is properly enabled.
+- `app/` already computes a fresh roughness value every second
+  internally (`RoadQualityRecorder.onTimerTick`), but whether that
+  actually lands in the FIT file every second is governed entirely by
+  the Edge's own **Smart Recording vs. Every Second Recording** system
+  setting (confirmed straight from `FitContributor.Field`'s docs) —
+  there is no Connect IQ API to override this per-app. If a Google
+  Maps/`docs/` overlay looks coarser than expected, check
+  Settings → System → Data Recording on the device itself.
+- The map screen's per-segment roughness coloring (many short
+  `MapPolyline`s instead of one solid line, since `MapPolyline` only
+  supports a single color) is new and, like the rest of the map screen,
+  unverified on real hardware - specifically the performance of
+  rebuilding up to ~119 polyline segments on every redraw hasn't been
+  confirmed to stay smooth on-device.
