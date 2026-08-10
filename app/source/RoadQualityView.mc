@@ -155,37 +155,150 @@ class RoadQualityView extends Ui.View {
         return minutes.format("%02d") + ":" + seconds.format("%02d");
     }
 
-    // Draws the whole-trip roughness trace: oldest reading at the left
-    // edge, most recent at the right, y-axis auto-scaled to the highest
-    // reading seen so far this trip.
+    // Draws the whole-trip roughness trace as a rounded card: filled
+    // area under the curve, the line itself color-coded green/yellow/red
+    // by roughness (same gradient as the map screen and docs/ web
+    // viewer), oldest reading at the left edge and most recent at the
+    // right, with the latest point highlighted. Y-axis is scaled to the
+    // 95th percentile of the visible history rather than the running
+    // max, so a single outlier spike can't squash the rest of the
+    // ride's real variation down near the bottom of the graph - same
+    // fix already applied to the map/web viewer's color scale, applied
+    // here to this graph's vertical scale too.
+    hidden const GRAPH_CARD_COLOR as Gfx.ColorType = 0x202020;
+    hidden const GRAPH_GRID_COLOR as Gfx.ColorType = 0x3a3a3a;
+    hidden const GRAPH_FILL_COLOR as Gfx.ColorType = 0x1c3320;
+    hidden const GRAPH_CORNER_RADIUS as Lang.Number = 8;
+
     hidden function drawGraph(dc as Gfx.Dc, x as Lang.Number, y as Lang.Number, w as Lang.Number, h as Lang.Number) as Void {
+        dc.setColor(GRAPH_CARD_COLOR, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x, y, w, h, GRAPH_CORNER_RADIUS);
         dc.setColor(Gfx.COLOR_DK_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawRectangle(x, y, w, h);
+        dc.drawRoundedRectangle(x, y, w, h, GRAPH_CORNER_RADIUS);
 
         var count = recorder.getHistoryCount();
         if (count < 2) {
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
             dc.drawText(x + w / 2, y + h / 2, Gfx.FONT_XTINY, "Waiting for data...", Gfx.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
             return;
         }
 
         var history = recorder.getHistory();
-        var maxValue = recorder.getHistoryMaxValue();
-        if (maxValue <= 0.0) {
-            maxValue = 0.01;
+        var range = graphColorRange(history, count);
+        var colorMin = range[0];
+        var colorMax = range[1];
+        var heightMax = colorMax * 1.15;
+        if (heightMax <= 0.0) { heightMax = 0.01; }
+
+        dc.setColor(GRAPH_GRID_COLOR, Gfx.COLOR_TRANSPARENT);
+        dc.drawLine(x, y + (h * 0.25).toNumber(), x + w, y + (h * 0.25).toNumber());
+        dc.drawLine(x, y + (h * 0.50).toNumber(), x + w, y + (h * 0.50).toNumber());
+        dc.drawLine(x, y + (h * 0.75).toNumber(), x + w, y + (h * 0.75).toNumber());
+
+        var xs = new [count] as Lang.Array<Lang.Number>;
+        var ys = new [count] as Lang.Array<Lang.Number>;
+        for (var i = 0; i < count; i += 1) {
+            xs[i] = x + (i * w) / (count - 1);
+            var py = y + h - ((history[i] / heightMax) * h).toNumber();
+            if (py < y) { py = y; }
+            ys[i] = py;
         }
 
-        dc.setColor(Gfx.COLOR_GREEN, Gfx.COLOR_TRANSPARENT);
+        var fillPoints = new [count + 2] as Lang.Array<Gfx.Point2D>;
+        fillPoints[0] = [xs[0], y + h];
+        for (var i = 0; i < count; i += 1) {
+            fillPoints[i + 1] = [xs[i], ys[i]];
+        }
+        fillPoints[count + 1] = [xs[count - 1], y + h];
+        dc.setColor(GRAPH_FILL_COLOR, Gfx.COLOR_TRANSPARENT);
+        dc.fillPolygon(fillPoints);
 
-        var prevX = x;
-        var prevY = y + h - ((history[0] / maxValue) * h).toNumber();
-
+        dc.setPenWidth(2);
         for (var i = 1; i < count; i += 1) {
-            var px = x + (i * w) / (count - 1);
-            var py = y + h - ((history[i] / maxValue) * h).toNumber();
-            dc.drawLine(prevX, prevY, px, py);
-            prevX = px;
-            prevY = py;
+            var avgValue = (history[i - 1] + history[i]) / 2.0;
+            dc.setColor(roughnessColor(avgValue, colorMin, colorMax), Gfx.COLOR_TRANSPARENT);
+            dc.drawLine(xs[i - 1], ys[i - 1], xs[i], ys[i]);
         }
+        dc.setPenWidth(1);
+
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.fillCircle(xs[count - 1], ys[count - 1], 3);
+
+        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(x + 4, y + 1, Gfx.FONT_XTINY, heightMax.format("%.2f") + "g", Gfx.TEXT_JUSTIFY_LEFT);
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+    }
+
+    // 5th/95th percentile of the visible history, used both as the
+    // color-gradient bounds and (via the caller adding headroom) the
+    // graph's vertical scale. Falls back to plain min/max when there's
+    // too little data for percentiles to be meaningful yet, matching how
+    // the map/web viewer handle the same situation.
+    hidden function graphColorRange(history as Lang.Array<Lang.Float>, count as Lang.Number) as Lang.Array<Lang.Float> {
+        if (count < 5) {
+            var minValue = history[0];
+            var maxValue = history[0];
+            for (var i = 1; i < count; i += 1) {
+                if (history[i] < minValue) { minValue = history[i]; }
+                if (history[i] > maxValue) { maxValue = history[i]; }
+            }
+            return [minValue, maxValue] as Lang.Array<Lang.Float>;
+        }
+
+        var sorted = new [count] as Lang.Array<Lang.Float>;
+        for (var i = 0; i < count; i += 1) {
+            sorted[i] = history[i];
+        }
+        insertionSort(sorted);
+
+        var p5Index = (count * 0.05).toNumber();
+        var p95Index = (count * 0.95).toNumber();
+        if (p95Index >= count) { p95Index = count - 1; }
+
+        var p5 = sorted[p5Index];
+        var p95 = sorted[p95Index];
+        if (p95 <= p5) { p95 = sorted[count - 1]; }
+        return [p5, p95] as Lang.Array<Lang.Float>;
+    }
+
+    // Array.sort() needs API Level 5.0.0, which the Edge 1030 Plus
+    // doesn't support (same as RoadQualityMapView's copy of this) -
+    // plain insertion sort instead, fine for the at most 120 elements
+    // the history buffer ever holds.
+    hidden function insertionSort(values as Lang.Array<Lang.Float>) as Void {
+        for (var i = 1; i < values.size(); i += 1) {
+            var key = values[i];
+            var j = i - 1;
+            while (j >= 0 && values[j] > key) {
+                values[j + 1] = values[j];
+                j -= 1;
+            }
+            values[j + 1] = key;
+        }
+    }
+
+    // Same green (smooth) -> yellow -> red (rough) gradient as the map
+    // screen and docs/ web viewer's roughnessColor(). Graphics.ColorType
+    // is just a packed 0xRRGGBB Number - built with bit shifts rather
+    // than Graphics.createColor(), which needs API Level 4.0.0 and isn't
+    // supported on the Edge 1030 Plus.
+    hidden function roughnessColor(value as Lang.Float, minValue as Lang.Float, maxValue as Lang.Float) as Gfx.ColorType {
+        var t = 0.0;
+        if (maxValue > minValue) {
+            t = (value - minValue) / (maxValue - minValue);
+        }
+        if (t < 0.0) { t = 0.0; }
+        if (t > 1.0) { t = 1.0; }
+
+        var r = 255;
+        var g = 255;
+        if (t < 0.5) {
+            r = (255 * (t / 0.5)).toNumber();
+        } else {
+            g = (255 * (1 - (t - 0.5) / 0.5)).toNumber();
+        }
+        return (r << 16) | (g << 8);
     }
 
 }

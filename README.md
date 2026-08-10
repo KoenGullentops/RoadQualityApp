@@ -98,6 +98,16 @@ code still can't touch the accelerometer at all).
   live history graph, and a large 2x2 grid (speed, distance, elapsed
   time, heart rate) filling the space below, also read from
   `Activity.getActivityInfo()`.
+
+  The history graph is a rounded card (`fillRoundedRectangle`) with a
+  filled area under the curve, gridlines, the most recent reading
+  highlighted, and the line itself colored green/yellow/red by
+  roughness - same gradient as the map screen and `docs/` web viewer.
+  Its vertical scale is the 95th percentile of the visible history (with
+  headroom above it) rather than the running max, for the same reason
+  the map/web viewer's color scale moved off raw min/max: one outlier
+  spike would otherwise squash all the real variation down near the
+  bottom of the graph.
 - **`source/RoadQualityDelegate.mc`** — tap the screen (or press the
   physical select button) to start recording; tap again to stop and save.
   Swipe or press the page button to open the map screen.
@@ -304,6 +314,13 @@ is empty, the ride wasn't recorded with either app.
     colored. Files with no speed data at all still color/stat normally
     (`docs/`'s `isRidingSpeed()` treats missing speed as "riding", not
     excluded).
+- The main screen's history graph restyle (rounded card, filled area,
+  gridlines, percentile-scaled color-coded line) is new and unverified
+  on real hardware - `fillRoundedRectangle`/`fillPolygon`/`fillCircle`/
+  `setPenWidth` are all confirmed API Level 1.0.0 against the local SDK
+  docs (so should be safe given `createColor` and `Array.sort()` were
+  the ones that turned out unsupported on this device), but that's not
+  the same as having actually seen it render.
 - The roughness score is a weighted RMS deviation, not a raw physical
   measurement, and the two apps now compute it differently:
   - `app/` calibrates every launch (see `RoadQualityCalibrator` above):
